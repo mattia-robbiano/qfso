@@ -1,6 +1,6 @@
 # qfso
 
-qfso is a Python package that consolidates the former `src` and `iqptn` code into one installable package.
+qfso is an installable Python package for IQP-inspired feature-space optimization workflows.
 
 ## What is included
 
@@ -55,5 +55,4 @@ This runs the Ising Metropolis generator and saves a `.npy` dataset.
 
 ## Development note
 
-The repository still contains the original `src` and `iqptn` folders as migration references.
-The consolidated package source of truth is the `qfso` folder.
+The package source of truth is the `qfso` folder.

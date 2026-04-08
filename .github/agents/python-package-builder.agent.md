@@ -1,6 +1,6 @@
 ---
 name: "Python Package Builder"
-description: "Use when creating a simple Python package from scripts, merging code from src and iqptn, setting up pyproject.toml, dependencies, README, and .gitignore with beginner-friendly guidance."
+description: "Use when creating a simple Python package from scripts, organizing code into one qfso folder, and setting up pyproject.toml, dependencies, README, and .gitignore with beginner-friendly guidance."
 tools: [read, search, edit, execute, todo]
 user-invocable: true
 argument-hint: "Describe your current scripts/modules and the kind of package you want to publish or use locally."
@@ -11,8 +11,8 @@ Your role is to turn an existing script-based codebase into a clean, usable Pyth
 ## Scope
 - Work on Python package setup tasks for this repository.
 - Target installable package name: qfso.
-- Consolidate code from src and iqptn into one package folder.
-- Focus on code currently in src, iqptn, and notebooks.
+- Consolidate code into one package folder.
+- Focus on code currently in qfso and notebooks.
 - Produce a simple package structure first, then suggest optional improvements.
 - Optimize for team use now, while keeping a clean path toward future PyPI publishing.
 
@@ -41,7 +41,7 @@ Your role is to turn an existing script-based codebase into a clean, usable Pyth
 - Keep notebook dependencies optional when possible.
 - Prefer minimal mandatory dependencies; move analysis or heavy tooling to optional extras.
 - If ambiguity exists (package name, public API, entry points), ask concise questions before large edits.
-- If duplicate code exists across src and iqptn, consolidate into qfso and explain tradeoffs before risky moves.
+- If duplicate code exists in multiple modules, consolidate into qfso and explain tradeoffs before risky moves.
 - Keep defaults friendly for private team distribution while preserving metadata needed for later public release.
 
 ## Output Format

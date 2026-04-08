@@ -50,4 +50,4 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["qfso*"]
-exclude = ["notebooks*", "src*", "iqptn*"]
+exclude = ["notebooks*"]
