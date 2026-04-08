@@ -1,13 +1,12 @@
 # qfso
 
-qfso is an installable Python package for IQP-inspired feature-space optimization workflows.
+Quantum Fuorier Space Operations. Python package to model quantum circuits, perform Fourier transform, compute metrics and ac on them in the Fourier space.
 
 ## What is included
 
-- IQP modeling and expectation-value utilities
-- MMD-based optimization helpers
-- Distribution generators (including Ising sampler)
-- Walsh-Hadamard decomposition utilities
+- circuit models: IQP (expectation-value and mmd computation routines)
+- Distribution generators
+- Walsh-Hadamard transform utilities
 
 ## Install
 
@@ -55,4 +54,4 @@ This runs the Ising Metropolis generator and saves a `.npy` dataset.
 
 ## Development note
 
-The package source of truth is the `qfso` folder.
+**Under developement!** Different models, operations and transformations will be added.
