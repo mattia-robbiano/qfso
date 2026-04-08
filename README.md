@@ -2,7 +2,7 @@
 
 Quantum Fourier Space Operations.
 
-`qfso` provides tools to work with IQP circuits, Fourier/Walsh-Hadamard representations, and dataset generation utilities used in current experiments.
+`qfso` provides tools to work with qft circuits and probability distributions and dataset generation utilities used in current experiments.
 
 ## Package Structure
 
