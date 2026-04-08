@@ -70,9 +70,6 @@ def generate_distribution_with_target_entropy(n_states: int, target_entropy: flo
         
     return boltzmann_dist(beta_opt)
 
-import jax
-import jax.numpy as jnp
-
 def sample_dataset_from_distribution(probabilities: jnp.ndarray, n_qubits: int, n_samples: int, key: jax.Array) -> jnp.ndarray:
     """
     Campiona un dataset di training di bitstrings a partire da una distribuzione di probabilità.
