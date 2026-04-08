@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qfso"
+version = "0.1.0"
+description = "Quantum feature-space optimization utilities for IQP-inspired workflows."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "QFSO Team" }]
+license = { text = "Proprietary" }
+dependencies = [
+  "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+coremath = [
+  "scipy>=1.10",
+]
+iqp = [
+  "jax>=0.4.26",
+  "optax>=0.2.2",
+  "quimb>=1.8.0",
+  "numba>=0.59",
+  "scipy>=1.10",
+]
+notebooks = [
+  "matplotlib>=3.8",
+  "jupyter>=1.0",
+  "ipykernel>=6.29",
+]
+all = [
+  "scipy>=1.10",
+  "jax>=0.4.26",
+  "optax>=0.2.2",
+  "quimb>=1.8.0",
+  "numba>=0.59",
+  "matplotlib>=3.8",
+  "jupyter>=1.0",
+  "ipykernel>=6.29",
+]
+
+[project.scripts]
+qfso-ising = "qfso.distributions.ising_generator:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["qfso*"]
+exclude = ["notebooks*", "src*", "iqptn*"]
