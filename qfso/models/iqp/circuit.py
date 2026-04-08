@@ -1,7 +1,6 @@
-from quimb.tensor import Circuit
-from quimb import pauli
-
 from itertools import combinations
+from quimb.tensor import Circuit
+
 
 def local_gates(N: int, max_weight: int = 2):
     """
@@ -21,8 +20,7 @@ def local_gates(N: int, max_weight: int = 2):
         for gate in combinations(range(N), w)
     ]
 
-
-def RStringZ(circ: Circuit, qubits: list, theta: float):
+def _rstringz(circ: Circuit, qubits: list, theta: float):
     """
     Apply in a Quimb circuit a multi-qubit Z-rotation (exp(-i * theta/2 * Z1 ⊗ Z2 ⊗ ... ⊗ Zn)) 
     to the circuit using CNOT strings and an RZ gate.
@@ -54,6 +52,10 @@ def RStringZ(circ: Circuit, qubits: list, theta: float):
     for i in reversed(range(len(qubits) - 1)):
         circ.apply_gate('CX', qubits[i], qubits[i+1])
 
+
+def RStringZ(circ: Circuit, qubits: list, theta: float):
+    """Backward-compatible public wrapper for multi-qubit Z rotations."""
+    _rstringz(circ, qubits, theta)
 
 class IQPTensorNetwork:
     """
@@ -97,7 +99,7 @@ class IQPTensorNetwork:
             circ.apply_gate('H', i)
         
         for theta, gen in zip(parameters, self.interactions):
-            RStringZ(circ, gen, theta)
+            _rstringz(circ, gen, theta)
 
         for i in range(self.nqubits):
             circ.apply_gate('H', i)

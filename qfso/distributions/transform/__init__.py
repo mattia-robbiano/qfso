@@ -1,23 +1,15 @@
-from .generate import (
-    generate_distribution_with_target_entropy,
-    run_metropolis,
-    sample_dataset_from_distribution,
-)
-from .transform import (
+from .wh import (
     BasisFunction,
-    FourierDecomposition,
-    WH_fixed_order_ids,
     WalshHadamardBasisFunction,
+    FourierDecomposition,
     WalshHadamardDecomposition,
-    convergence_scaling,
+    WH_fixed_order_ids,
     discretized_normal_probability,
     exact_WH_coefficient,
+    convergence_scaling,
 )
 
 __all__ = [
-    "run_metropolis",
-    "generate_distribution_with_target_entropy",
-    "sample_dataset_from_distribution",
     "BasisFunction",
     "WalshHadamardBasisFunction",
     "FourierDecomposition",

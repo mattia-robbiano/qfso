@@ -1,28 +1,77 @@
 # qfso
 
-Quantum Fuorier Space Operations. Python package to model quantum circuits, perform Fourier transform, compute metrics and ac on them in the Fourier space.
+Quantum Fourier Space Operations.
 
-## What is included
+`qfso` provides tools to work with IQP circuits, Fourier/Walsh-Hadamard representations, and dataset generation utilities used in current experiments.
 
-- circuit models: IQP (expectation-value and mmd computation routines)
-- Distribution generators
-- Walsh-Hadamard transform utilities
+## Package Structure
 
-## Install
+The package is organized in two main namespaces:
 
-Minimal core install:
+- `qfso.distributions`
+	- `generate`: dataset/probability generators
+	- `transform.wh`: Walsh-Hadamard transform and decomposition utilities
+- `qfso.models`
+	- `iqp`: IQP circuit model and operations on IQP circuits
+
+The utility module `qfso.utils` remains available for shared helper functions.
+
+## Current Functionalities
+
+### 1. IQP modeling and operations (`qfso.models.iqp`)
+
+- IQP circuit construction:
+	- `IQPTensorNetwork`
+	- `local_gates`
+	- `RStringZ`
+- Expectation estimation:
+	- `expvals_contraction`
+	- `expvals_sampling`
+	- `expvals_mc`
+- MMD loss and optimization:
+	- `mmd_mc`
+	- `setup_training`
+- Sigma heuristics:
+	- `median_heuristic`
+	- `sigma_spectrum`
+	- `sigma_heuristic`
+
+### 2. Distribution generation (`qfso.distributions.generate`)
+
+- Ising Metropolis sampler:
+	- `run_metropolis`
+- Entropy-controlled synthetic distribution tools:
+	- `generate_distribution_with_target_entropy`
+	- `sample_dataset_from_distribution`
+
+### 3. Walsh-Hadamard transforms (`qfso.distributions.transform.wh`)
+
+- Basis functions and decomposition classes:
+	- `BasisFunction`
+	- `WalshHadamardBasisFunction`
+	- `FourierDecomposition`
+	- `WalshHadamardDecomposition`
+- Utility functions:
+	- `WH_fixed_order_ids`
+	- `discretized_normal_probability`
+	- `exact_WH_coefficient`
+	- `convergence_scaling`
+
+## Installation
+
+Minimal install:
 
 ```bash
 pip install -e .
 ```
 
-Install with IQP/training stack:
+With IQP/training dependencies:
 
 ```bash
 pip install -e .[iqp]
 ```
 
-Install with notebook extras:
+With notebook dependencies:
 
 ```bash
 pip install -e .[notebooks]
@@ -34,17 +83,23 @@ Install everything:
 pip install -e .[all]
 ```
 
-## Quick usage
+## Quick Usage
 
 ```python
-from qfso.models import IQPTensorNetwork, local_gates
-from qfso.sigma import sigma_spectrum
-from qfso.optimizer import setup_training
+from qfso.models.iqp import IQPTensorNetwork, local_gates, setup_training, sigma_spectrum
+from qfso.distributions.generate import run_metropolis
+from qfso.distributions.transform.wh import WalshHadamardDecomposition
 ```
 
-## Command line
+Top-level convenience imports are also available for the main public symbols:
 
-The package exposes one small CLI command for dataset generation:
+```python
+from qfso import IQPTensorNetwork, mmd_mc, sigma_heuristic
+```
+
+## Command Line
+
+Generate Ising samples from CLI:
 
 ```bash
 qfso-ising 6 --all_steps 100000 --temp 2.4 --h 0.08
@@ -52,6 +107,6 @@ qfso-ising 6 --all_steps 100000 --temp 2.4 --h 0.08
 
 This runs the Ising Metropolis generator and saves a `.npy` dataset.
 
-## Development note
+## Status
 
-**Under developement!** Different models, operations and transformations will be added.
+The project is under active development. Additional models, operations, and transforms will be added over time.

@@ -1,25 +1,25 @@
 from importlib import import_module
 
 _EXPORTS = {
-    "median_heuristic": ("qfso.sigma", "median_heuristic"),
-    "sigma_spectrum": ("qfso.sigma", "sigma_spectrum"),
-    "sigma_heuristic": ("qfso.euristics", "sigma_heuristic"),
-    "expvals_contraction": ("qfso.expectation", "expvals_contraction"),
-    "expvals_sampling": ("qfso.expectation", "expvals_sampling"),
-    "expvals_mc": ("qfso.expectation", "expvals_mc"),
-    "run_metropolis": ("qfso.distributions.ising_generator", "run_metropolis"),
+    "median_heuristic": ("qfso.models.iqp.sigma_euristics", "median_heuristic"),
+    "sigma_spectrum": ("qfso.models.iqp.sigma_euristics", "sigma_spectrum"),
+    "sigma_heuristic": ("qfso.models.iqp.sigma_euristics", "sigma_heuristic"),
+    "expvals_contraction": ("qfso.models.iqp.operations", "expvals_contraction"),
+    "expvals_sampling": ("qfso.models.iqp.operations", "expvals_sampling"),
+    "expvals_mc": ("qfso.models.iqp.operations", "expvals_mc"),
+    "run_metropolis": ("qfso.distributions.generate.ising_generator", "run_metropolis"),
     "generate_distribution_with_target_entropy": (
-        "qfso.distributions.boltzman_entropy_generator",
+        "qfso.distributions.generate.boltzman_entropy_generator",
         "generate_distribution_with_target_entropy",
     ),
     "sample_dataset_from_distribution": (
-        "qfso.distributions.boltzman_entropy_generator",
+        "qfso.distributions.generate.boltzman_entropy_generator",
         "sample_dataset_from_distribution",
     ),
-    "mmd_mc": ("qfso.mmd", "mmd_mc"),
-    "local_gates": ("qfso.models", "local_gates"),
-    "RStringZ": ("qfso.models", "RStringZ"),
-    "IQPTensorNetwork": ("qfso.models", "IQPTensorNetwork"),
+    "mmd_mc": ("qfso.models.iqp.operations", "mmd_mc"),
+    "local_gates": ("qfso.models.iqp.circuit", "local_gates"),
+    "RStringZ": ("qfso.models.iqp.circuit", "RStringZ"),
+    "IQPTensorNetwork": ("qfso.models.iqp.circuit", "IQPTensorNetwork"),
     "convert_to_jnp_ndarray": ("qfso.utils", "convert_to_jnp_ndarray"),
 }
 

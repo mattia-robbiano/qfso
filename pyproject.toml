@@ -42,7 +42,7 @@ all = [
 ]
 
 [project.scripts]
-qfso-ising = "qfso.distributions.ising_generator:main"
+qfso-ising = "qfso.distributions.generate.ising_generator:main"
 
 [tool.setuptools]
 include-package-data = true
