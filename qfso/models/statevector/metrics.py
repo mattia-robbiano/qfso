@@ -21,3 +21,12 @@ def mmd_qubits(p: jnp.ndarray, q: jnp.ndarray, sigma: float) -> jnp.ndarray:
     
     diff = p - q
     return jnp.dot(diff, jnp.dot(K, diff))
+
+def renyi_entropy(distribution, alpha=2, tol=1e-10):
+    """
+    Compute the Renyi entropy of a distribution for a given alpha.
+    """
+    if alpha == 1:
+        return -jnp.sum(distribution * jnp.log(distribution + tol))  # Add small value to avoid log(0)
+    else:
+        return (1 / (1 - alpha)) * jnp.log(jnp.sum(distribution ** alpha) + tol)  # Add small value to avoid log(0)
