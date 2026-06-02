@@ -9,7 +9,6 @@ description = "Quantum Fourier Space Operations utilities."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Mattia Robbiano, Giulio Crognaletti" }]
-repository = "https://github.com/mattia-robbiano/qfso/"
 dependencies = [
   "numpy>=1.24",
 ]
