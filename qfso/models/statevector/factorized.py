@@ -1,25 +1,30 @@
 from jax import numpy as jnp
-has_one = lambda x, bit: (x >> bit) & 1
+from jax import jit
 
+
+def has_one(x, bit):
+    return (x >> bit) & 1
+
+@jit
 def _compute_marginal(distribution, bit):
     """
     Compute the marginal distribution of the given distribution p over the specified bit.
     """
-    m=0
-    for i, p in enumerate(distribution):
-        if has_one(i, bit): m += p
-        
-    return 1 - m, m
+    indices = jnp.arange(distribution.shape[0])
+    m = jnp.sum(jnp.where(has_one(indices, bit) == 1, distribution, 0))
+    return jnp.array([1 - m, m])
 
+@jit
 def match_first_order(distribution):
     """
     Find a factorized distribution that matches the first order moments of the given distribution p. 
     """
-    assert len(distribution) & (len(distribution) - 1) == 0, "Distribution length must be a power of 2."
-    n = len(distribution).bit_length() - 1
-    
-    marginals = [_compute_marginal(distribution, bit) for bit in range(n)]
-    
-    return jnp.array([jnp.prod(
-        jnp.array([marginals[bit][has_one(i, bit)] for bit in range(n)])
-        ) for i in range(len(distribution))])
+    n_states = distribution.shape[0]
+    n = n_states.bit_length() - 1
+
+    indices = jnp.arange(n_states)
+    bits = jnp.arange(n)
+    marginals = jnp.stack([_compute_marginal(distribution, bit) for bit in range(n)])
+    bit_values = ((indices[:, None] >> bits[None, :]) & 1).astype(jnp.int32)
+    probs = jnp.take_along_axis(marginals[None, :, :], bit_values[:, :, None], axis=2).squeeze(-1)
+    return jnp.prod(probs, axis=1)
