@@ -1,10 +1,12 @@
 import jax
 import jax.numpy as jnp
 from scipy.optimize import brentq
+from qfso.models.statevector.metrics import renyi_entropy
 
 
-def generate_distribution_with_target_entropy(n_states: int, target_entropy: float, key: jax.Array) -> jnp.ndarray:
-    """Generates a discrete probability distribution with a specific target Shannon entropy.
+def generate_distribution_with_target_entropy(n_states: int, target_entropy: float, key: jax.Array, alpha: float = 1.0) -> jnp.ndarray:
+    """Generates a discrete probability distribution with a specific target Renyi entropy.
+    If alpha=1, this corresponds to the Shannon entropy.
 
     This function uses a Boltzmann distribution (softmax) over a random energy landscape.
     It solves for the inverse temperature beta such that the resulting distribution 
@@ -14,10 +16,11 @@ def generate_distribution_with_target_entropy(n_states: int, target_entropy: flo
     Args:
         n_states (int): The number of possible outcomes (size of the Hilbert space 
             or bitstring space).
-        target_entropy (float): Desired Shannon entropy in nats. Must be in the 
+        target_entropy (float): Desired Renyi entropy in nats. Must be in the 
             range [0, log(n_states)].
         key (jax.Array): A JAX PRNG key used to generate the underlying 
             random energy landscape.
+        alpha (float): The Renyi entropy parameter. If alpha=1, this corresponds to the Shannon entropy.
 
     Returns:
         jnp.ndarray: A 1D array of shape (n_states,) representing the 
@@ -57,7 +60,7 @@ def generate_distribution_with_target_entropy(n_states: int, target_entropy: flo
         p = boltzmann_dist(beta)
         # Mask per evitare warning su log(0) se beta è molto grande
         p_safe = jnp.where(p > 0, p, 1e-12)
-        current_entropy = -jnp.sum(p * jnp.log(p_safe))
+        current_entropy = renyi_entropy(p, alpha=alpha)
         return float(current_entropy - target_entropy)
     
     # Ricerca dello zero: S(beta) decresce da max_entropy (a beta=0) a 0 (a beta=inf)
