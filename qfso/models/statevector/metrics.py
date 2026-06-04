@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 
 @jax.jit
-def mmd_qubits(p: jnp.ndarray, q: jnp.ndarray, sigma: float) -> jnp.ndarray:
+def mmd_exact(p: jnp.ndarray, q: jnp.ndarray, sigma: float) -> jnp.ndarray:
     """
     Exact MMD between two distributions over n sites using an RBF kernel.
     
