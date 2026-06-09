@@ -107,3 +107,33 @@ def convergence_scaling(
 
         mean_estimate = np.mean(coeffs_matrix, axis=0)
         yield np.abs(mean_estimate - true_coefficients)
+
+def get_wh_coefficients_in_range(
+    probability_vector: np.ndarray, 
+    n_qubits: int, 
+    k0: int, 
+    k1: int
+) -> dict[int, float]:
+    """
+    Computes WH coefficients for orders (Hamming weights) between k0 and k1.
+
+    Args:
+        probability_vector: NumPy array representing the full PDF (dimension 2**n).
+        n_qubits: Number of bits/qubits (n).
+        k0: Lower bound of Hamming weight.
+        k1: Upper bound of Hamming weight (inclusive).
+
+    Returns:
+        A dictionary mapping the identifier (bitmask) to its exact WH coefficient.
+    """
+    target_orders = list(range(k0, k1 + 1))
+    
+    # Generate identifiers for target orders
+    target_ids = WH_fixed_order_ids(n=n_qubits, order=target_orders)
+    
+    coefficients = {
+        ident: exact_WH_coefficient(probability_vector, ident)
+        for ident in target_ids
+    }
+    
+    return coefficients
