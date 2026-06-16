@@ -1,7 +1,6 @@
 from itertools import combinations
 
 import numpy as np
-from scipy.stats import norm
 
 from .basis_functions import WalshHadamardBasisFunction
 from .fourier_decomposition import WalshHadamardDecomposition
@@ -29,31 +28,6 @@ def WH_fixed_order_ids(n: int, order: int | list[int]) -> list[int]:
                 ident += 1 << i
             ids.append(ident)
     return ids
-
-
-def discretized_normal_probability(interval: tuple[float, float], num_bins: int, loc: float = 0) -> np.ndarray:
-    """
-    Generates a discrete probability distribution from a continuous Gaussian.
-
-    Args:
-        interval (tuple): (min_val, max_val) specifying the integration range.
-        num_bins (int): Number of discrete states.
-        loc (float): Mean of the normal distribution.
-
-    Returns:
-        np.ndarray: Normalized 1D array of discrete probabilities.
-    """
-    min_val, max_val = interval
-    bins = np.linspace(min_val, max_val, num_bins + 1)
-    probabilities = []
-
-    for i in range(num_bins):
-        prob = norm.cdf(bins[i + 1], loc=loc, scale=1) - norm.cdf(bins[i], loc=loc, scale=1)
-        probabilities.append(prob)
-
-    probability_vector = np.array(probabilities)
-    probability_vector /= np.sum(probability_vector)
-    return probability_vector
 
 
 def exact_WH_coefficient(probability_vector: np.ndarray, identifier: int) -> float:
