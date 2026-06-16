@@ -4,7 +4,13 @@ from scipy.optimize import brentq
 from qfso.models.statevector.metrics import renyi_entropy
 
 
-def generate_distribution_with_target_entropy(n_states: int, target_entropy: float, key: jax.Array, alpha: float = 1.0) -> jnp.ndarray:
+def generate_distribution_with_target_entropy(
+        n_states: int, 
+        target_entropy: float, 
+        key: jax.Array, 
+        alpha: float = 1.0,
+        hamiltonian: tuple = (None, None)
+        ) -> jnp.ndarray:
     """Generates a discrete probability distribution with a specific target Renyi entropy.
     If alpha=1, this corresponds to the Shannon entropy.
 
@@ -36,16 +42,33 @@ def generate_distribution_with_target_entropy(n_states: int, target_entropy: flo
         distribution is returned directly.
     """
     max_entropy = float(jnp.log(n_states))
+
     if target_entropy >= max_entropy:
         return jnp.ones(n_states) / n_states
+
     elif target_entropy <= 0.0:
         dist = jnp.zeros(n_states)
         # Se entropia 0, collassiamo tutto su un singolo stato a caso
         idx = jax.random.randint(key, shape=(), minval=0, maxval=n_states)
         return dist.at[idx].set(1.0)
     
-    # Generiamo un panorama di "energie" casuali
-    energies = jax.random.normal(key, (n_states,))
+    h_type, J = hamiltonian
+    if h_type == None:
+        # Generiamo un panorama di "energie" casuali
+        energies = jax.random.normal(key, (n_states,))#, minval=0.0, maxval=5.0)
+    
+    elif h_type == "pairs":
+        n_qubits = int(jnp.round(jnp.log2(n_states)))
+
+        # Map state indices to spin configurations Z in {1, -1}
+        idx = jnp.arange(n_states)
+        spins = 1 - 2 * ((idx[:, None] >> jnp.arange(n_qubits)[::-1]) & 1)
+                
+        # H = sum_{ij} J_{ij} Z_i Z_j
+        energies = jnp.einsum('ni,ij,nj->n', spins, J, spins)
+        
+    else: raise ValueError(f"Hamiltonian type {h_type} non supportato.")
+    
     
     # Shift delle energie per stabilità numerica (log-sum-exp trick)
     shifted_energies = energies - jnp.min(energies)
