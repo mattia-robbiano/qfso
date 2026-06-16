@@ -5,6 +5,8 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
+from qfso.distributions.transform.wh.utils import WH_fixed_order_ids
+
 
 def mmd_kernel_weight(hw: int, n: int, sigma: float) -> float:
     """Binomial MMD kernel weight for Hamming weight hw."""
@@ -25,6 +27,23 @@ def wht(p: np.ndarray) -> np.ndarray:
         h *= 2
     return a
 
+
+def _compactify(samples: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    # np.unique returns sorted unique elements and their respective counts
+    vals, counts = np.unique(samples, return_counts=True)
+    # Normalize the counts to get probabilities, just like your code
+    probabilities = counts.astype(float) / len(samples)
+    
+    return probabilities, vals
+
+def truncated_wht_from_samples(samples:np.ndarray, n:int, hw_min:int, hw_max:int):
+    
+    c, idxs = _compactify(samples)
+    ks = np.array(WH_fixed_order_ids(n, list(range(hw_min, hw_max+1))))
+    
+    int_H = np.bitwise_and.outer(ks,idxs)
+    H = np.bitwise_count(int_H) % 2
+    return 1 - 2*H@c
 
 def mmd_squared(p: np.ndarray, q: np.ndarray, sigma: float) -> float:
     """Compute MMD²(p, q) from Walsh-Hadamard coefficients."""
