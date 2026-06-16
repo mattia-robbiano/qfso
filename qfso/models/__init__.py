@@ -11,7 +11,15 @@ from .iqp import (
     sigma_spectrum,
     sigma_heuristic,
 )
-from .statevector import match_first_order, mmd_exact, renyi_entropy
+from .statevector import (
+    match_first_order,
+    match_mmd_optimal,
+    mmd_exact,
+    mmd_kernel_weight,
+    mmd_squared,
+    renyi_entropy,
+    wht,
+)
 
 __all__ = [
     "IQPTensorNetwork",
@@ -26,6 +34,10 @@ __all__ = [
     "sigma_spectrum",
     "sigma_heuristic",
     "match_first_order",
+    "match_mmd_optimal",
     "mmd_exact",
+    "mmd_kernel_weight",
+    "mmd_squared",
+    "wht",
     "renyi_entropy",
 ]

@@ -1,10 +1,11 @@
+from qfso.distributions.utils import discretized_normal_probability
+
 from .wh import (
     BasisFunction,
     WalshHadamardBasisFunction,
     FourierDecomposition,
     WalshHadamardDecomposition,
     WH_fixed_order_ids,
-    discretized_normal_probability,
     exact_WH_coefficient,
     convergence_scaling,
 )
