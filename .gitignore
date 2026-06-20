@@ -33,3 +33,5 @@ coverage.xml
 *.npy
 *.npz
 datasets/
+notebooks/hadamard.ipynb
+experiments/mmd_entropy_bounds_2.py

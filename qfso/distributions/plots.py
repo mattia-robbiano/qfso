@@ -3,6 +3,7 @@ from __future__ import annotations
 
 def plot_distributions(distributions, labels=None, title: str = ""):
     import matplotlib.pyplot as plt
+    import numpy as np
 
     if not isinstance(distributions, list):
         distributions = [distributions]
@@ -10,13 +11,17 @@ def plot_distributions(distributions, labels=None, title: str = ""):
     if labels is None:
         labels = [f"dist {index}" for index in range(len(distributions))]
 
+    fig, ax = plt.subplots()
+    
     for index, distribution in enumerate(distributions):
-        plt.bar(range(len(distribution)), distribution, alpha=0.5, label=labels[index])
+        dist_array = np.asarray(distribution)
+        x = np.arange(len(dist_array))
+        ax.bar(x, dist_array, alpha=0.5, label=labels[index])
 
-    plt.title(title)
-    plt.xlabel("Index")
-    plt.ylabel("Probability")
-    plt.legend()
+    ax.set_title(title)
+    ax.set_xlabel("Index")
+    ax.set_ylabel("Probability")
+    ax.legend()
     plt.tight_layout()
     plt.show()
 

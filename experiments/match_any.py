@@ -1,12 +1,8 @@
 import numpy as np
-from qfso.distributions import discretized_normal_probability, plot_distributions, uniform_like
-from qfso.models.statevector import (
-    hamming_weight,
-    match_first_order,
-    match_mmd_optimal,
-    mmd_squared,
-    sorted_mmd_contributions,
-)
+
+from qfso.distributions import uniform_like, discretized_normal_probability, plot_distributions
+from qfso.models.approximate import match_first_order,match_mmd_optimal,mmd_squared, hamming_weight
+from qfso.models.approximate.factorized import _sorted_mmd_contributions
 
 
 if __name__ == "__main__":
@@ -31,11 +27,7 @@ if __name__ == "__main__":
         title="MMD-optimal factorized approximation",
     )
 
-    contributions = sorted_mmd_contributions(p, sigma=sigma, hw_min=1, hw_max=3)
+    contributions = _sorted_mmd_contributions(p, sigma=sigma, hw_min=1, hw_max=3)
     print("\nTop MMD contributions:")
     for k, contrib, c in contributions[:10]:
         print(f"  k={k:0{n}b}  hw={hamming_weight(k)}  w*ĉ²={contrib:.6f}  ĉ={c:.4f}")
-
-
-    #TODO compute mmd exact and model 500 shots
-

@@ -11,7 +11,7 @@ from .iqp import (
     sigma_spectrum,
     sigma_heuristic,
 )
-from .statevector import (
+from .approximate import (
     match_first_order,
     match_mmd_optimal,
     mmd_exact,

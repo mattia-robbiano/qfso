@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 from scipy.optimize import brentq
-from qfso.models.statevector.metrics import renyi_entropy
+from qfso.models.approximate.metrics import renyi_entropy
 
 
 def generate_distribution_with_target_entropy(
