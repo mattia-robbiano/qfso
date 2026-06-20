@@ -38,7 +38,11 @@ def _basis_permutation(basis_indices: list[int], n: int) -> np.ndarray:
     ], dtype=np.int64)
 
 def _sorted_mmd_contributions(p: np.ndarray, sigma: float, hw_min: int = 1, hw_max: int = None) -> list[tuple]:
-    """Sort Fourier coefficients by their contribution to the MMD."""
+    """
+    Sort Fourier coefficients by their contribution to the MMD.
+    Returns list of tuples: (k, mmd_contribution, fuorier coefficient) ordered for largest mmd_contribution
+    
+    """
     n = int(round(np.log2(p.size)))
     hw_max = n if hw_max is None else hw_max
     coeffs = get_wh_coefficients_in_range(p, n, hw_min, hw_max)
