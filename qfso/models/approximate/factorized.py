@@ -6,6 +6,7 @@ from .algebra import int_to_gf2, gf2_to_int, indices_to_gf2_matrix, biggest_inde
 from .metrics import mmd_squared, mmd_kernel_weight
 from qfso.distributions.transform.wh.utils import get_wh_coefficients_in_range
 
+
 @njit(cache=True)
 def _build_product_distribution(marginal_zero_probs: np.ndarray) -> np.ndarray:
     """Build product distribution. Loops are used because Numba optimizes them perfectly."""
@@ -70,7 +71,9 @@ def _build_from_generators(n: int, basis: list[int], contributions: list[tuple],
     
     return q / q.sum()
 
-
+#________________________________________________________________________________________________________________________ 
+#                                                      API
+#________________________________________________________________________________________________________________________
 @njit(cache=True)
 def match_first_order(p: np.ndarray) -> np.ndarray:
     """Find a factorized distribution that matches the first order moments of the given distribution p."""
@@ -91,11 +94,23 @@ def match_first_order(p: np.ndarray) -> np.ndarray:
     return _build_product_distribution(marginal_zero_probs)
 
 
-def match_mmd_optimal(p: np.ndarray, sigma: float, hw_min: int = 1, hw_max: int = None, optimize: bool = False, max_iter: int = 50) -> np.ndarray:
-    """Find the optimal factorized distribution, optionally learning parameters via L-BFGS-B."""
+def match_mmd_optimal(
+        p: np.ndarray, 
+        sigma: float, 
+        hw_min: int = 1, hw_max: int = None, 
+        optimize: bool = False, 
+        max_iter: int = 50,
+        contributions: list[tuple] = None,
+        basis: list[int] = None
+        ) -> np.ndarray:
+    """
+        Find the optimal factorized distribution, optionally learning parameters via L-BFGS-B.
+        It is possible to pass custom contributions and basis.
+    """
     n = int(round(np.log2(p.size)))
-    contributions = _sorted_mmd_contributions(p, sigma, hw_min, hw_max)
-    basis = biggest_independent_set(contributions, n)
+    if contributions is None or basis is None:
+        contributions = _sorted_mmd_contributions(p, sigma, hw_min, hw_max)
+        basis = biggest_independent_set(contributions, n)
 
     if not optimize:
         return _build_from_generators(n, basis, contributions)
@@ -113,3 +128,68 @@ def match_mmd_optimal(p: np.ndarray, sigma: float, hw_min: int = 1, hw_max: int 
     )
     
     return _build_from_generators(n, basis, contributions, res.x)
+
+
+def match_mmd_multiple_learning(p: np.ndarray, sigma: float, hw_min: int = 1, hw_max: int = None, number_of_distributions: int = 5, optimize: bool = False, max_iter: int = 5) -> list[np.ndarray]:
+    """
+    Learns a mixture of factorized distributions by iteratively finding where 
+    the current distribution deviates most from the target in the Fourier domain.
+    """
+    n = int(round(np.log2(p.size)))
+    # Index-based alignment by sorting by the the basis index k
+    contributions_original = sorted(_sorted_mmd_contributions(p, sigma, hw_min, hw_max), key=lambda x: x[0])
+
+    q_list = []
+    q_current = None 
+    for step in range(number_of_distributions):
+        if step == 0:
+            # First iteration: Fit standard optimal distribution
+            q = match_mmd_optimal(p, sigma, hw_min, hw_max, optimize, max_iter)
+            q_list.append(q)
+            q_current = q
+        else:
+            # Compute Fourier contributions of the current mixture
+            contributions_q = sorted(_sorted_mmd_contributions(q_current, sigma, hw_min, hw_max), key=lambda x: x[0])
+
+            # Identify where the approximation deviates most from the original
+            sorted_differences = sorted(
+                zip(contributions_q, contributions_original),
+                key=lambda pair: abs(pair[1][2] - pair[0][2]), # abs(coef_orig - coef_q)
+                reverse=True
+            )
+            
+            # Extract the worst n contribution tuples and extract the basis indices from these worst contributions
+            worst_contributions_sorted = [q_tuple for q_tuple, _ in sorted_differences]
+            new_basis = biggest_independent_set(worst_contributions_sorted, n)
+
+            # Fit a new distribution targeting poorly-matched basis elements
+            # We pass the target 'contributions_original' so it tries to match the true coefficients
+            q_new = match_mmd_optimal(
+                p, sigma, hw_min, hw_max, optimize, max_iter,
+                contributions=contributions_original, 
+                basis=new_basis
+            )
+            q_list.append(q_new)
+
+    return q_list
+
+
+def sample_mixture(num_samples, weights, samplers):
+    """
+    num_samples: Total number of samples to generate
+    weights: Array-like of probabilities (must sum to 1)
+    samplers: List of functions, each drawing from a specific q_i
+    """
+    # 1. Choose the distribution index for each sample
+    components = np.random.choice(len(weights), size=num_samples, p=weights)
+    
+    # 2. Draw samples from the selected components
+    samples = np.empty(num_samples)
+    for i, sampler in enumerate(samplers):
+        mask = (components == i)
+        n_i = np.sum(mask) # How many times this component was chosen
+        if n_i > 0:
+            samples[mask] = sampler(size=n_i)
+            
+    return samples
+
