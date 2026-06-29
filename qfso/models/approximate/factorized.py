@@ -136,6 +136,7 @@ def match_mmd_multiple_learning(p: np.ndarray, sigma: float, hw_min: int = 1, hw
     the current distribution deviates most from the target in the Fourier domain.
     """
     n = int(round(np.log2(p.size)))
+
     # Index-based alignment by sorting by the the basis index k
     contributions_original = sorted(_sorted_mmd_contributions(p, sigma, hw_min, hw_max), key=lambda x: x[0])
 
@@ -162,14 +163,13 @@ def match_mmd_multiple_learning(p: np.ndarray, sigma: float, hw_min: int = 1, hw
             worst_contributions_sorted = [q_tuple for q_tuple, _ in sorted_differences]
             new_basis = biggest_independent_set(worst_contributions_sorted, n)
 
-            # Fit a new distribution targeting poorly-matched basis elements
-            # We pass the target 'contributions_original' so it tries to match the true coefficients
-            q_new = match_mmd_optimal(
-                p, sigma, hw_min, hw_max, optimize, max_iter,
-                contributions=contributions_original, 
-                basis=new_basis
-            )
+            # Now: we need to need to construct the probability distribution q2 such that
+            # it minimizes ∆= p - α*q0 - (1-α)*q1
+
+
             q_list.append(q_new)
+            
+            q_current=q_new
 
     return q_list
 
@@ -193,3 +193,6 @@ def sample_mixture(num_samples, weights, samplers):
             
     return samples
 
+def sample_simple(num_samples, q):
+    """Helper function to sample from a single distribution q."""
+    return np.random.choice(len(q), size=num_samples, p=q)

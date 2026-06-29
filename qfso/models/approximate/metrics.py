@@ -1,6 +1,6 @@
 import numpy as np
 from numba import njit
-from qfso.distributions.transform.wh.utils import WH_fixed_order_ids
+# from qfso.distributions.transform.wh.utils import WH_fixed_order_ids
 
 def hamming_weight(k: int) -> int:
     return k.bit_count()
@@ -50,7 +50,7 @@ def mmd_exact(p: np.ndarray, q: np.ndarray, sigma: float) -> float:
             total += (p[i] - q[i]) * k_val * (p[j] - q[j])
     return total
 
-@njit(cache=True)
+# @njit(cache=False)
 def renyi_entropy(distribution: np.ndarray, alpha: float = 2.0, tol: float = 1e-10) -> float:
     """Compute the Renyi entropy of a distribution."""
     if alpha == 1.0:
