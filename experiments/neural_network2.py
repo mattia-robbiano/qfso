@@ -77,21 +77,36 @@ class MMD(nn.Module):
         )
         self.register_buffer('kernel_weights', torch.from_numpy(weights))
     
-    def forward(self, logits: torch.Tensor) -> torch.Tensor:
+    def forward(self, samples: torch.Tensor) -> torch.Tensor:
         """
         Compute differentiable MMD² loss.
         
         Args:
-            logits: (batch_size, 2^N) probabilities for each bitstring
+            samples: (batch_size, N) bitstrings from the model
         
         Returns:
             loss: scalar torch tensor (differentiable)
         """
-        # Normalize to probability distribution
-        probs = F.softmax(logits, dim=1)  # (batch_size, 2^N)
+        batch_size = samples.size(0)
+        device = samples.device
+        
+        # BRIDGE: Construct the 2^N empirical distribution from N-dim samples.
+        # This keeps the gradients flowing back to the N bits.
+        indices = torch.arange(2**self.N, device=device)
+        
+        # Create a (2^N, N) matrix of all possible ideal bitstrings
+        bit_matrix = ((indices.unsqueeze(1) >> torch.arange(self.N, device=device)) & 1).float()
+        
+        # Probability of each sample matching each 2^N state
+        # samples: (batch_size, 1, N), bit_matrix: (1, 2^N, N)
+        match_probs = samples.unsqueeze(1) * bit_matrix.unsqueeze(0) + \
+                      (1 - samples.unsqueeze(1)) * (1 - bit_matrix.unsqueeze(0))
+                      
+        # Joint probability over N bits -> (batch_size, 2^N)
+        state_probs = match_probs.prod(dim=2)
         
         # Mean probability across batch (empirical distribution)
-        empirical_dist = probs.mean(dim=0)  # (2^N,)
+        empirical_dist = state_probs.mean(dim=0)  # (2^N,)
         
         # Transform both to Fourier space
         # TODO: we use full Fourier transform, differentiable
@@ -104,7 +119,7 @@ class MMD(nn.Module):
         mmd_sq = torch.sum(self.kernel_weights * diff ** 2)
         
         return mmd_sq
-    
+        
     def _full_wht(self, p: torch.Tensor) -> torch.Tensor:
         """
         Differentiable approximation of WHT.
@@ -157,62 +172,41 @@ class Model(nn.Module):
         self.r = r
         
         # Calculate hidden dimension
+        # Adjusted target params calculation since output is now N, not 2^N
         target_params = int((N ** k) * r)
-        H = max(1, (target_params - 2**N) // (N + 2**N + 1))
+        H = max(1, (target_params - N) // (N + N + 1))
         self.hidden_dim = H
         
-        # Network outputs logits for each bitstring
+        # Network outputs logits for each independent bit
         self.net = nn.Sequential(
             nn.Linear(N, H),
             nn.ReLU(),
-            nn.Linear(H, 2**N)  # Logit for each possible bitstring
+            nn.Linear(H, N)  # CHANGED: Logit for each of the N bits
         )
     
-    def forward(self, z: torch.Tensor) -> torch.Tensor:
+    def forward(self, z: torch.Tensor, hard: bool = True) -> torch.Tensor:
         """
-        Forward pass.
+        Forward pass with Straight-Through Estimator (STE) for discrete sampling.
         
         Args:
             z: (batch_size, N) Gaussian noise
+            hard: If True, return discrete bitstrings with gradients attached
         
         Returns:
-            logits: (batch_size, 2^N)
+            samples: (batch_size, N)
         """
-        return self.net(z)
-    
-    def sample_from_logits(self, logits: torch.Tensor, hard: bool = True) -> torch.Tensor:
-        """
-        Convert logits to bitstring samples.
+        logits = self.net(z)
+        probs = torch.sigmoid(logits)
         
-        Args:
-            logits: (batch_size, 2^N)
-            hard: If True, return discrete bitstrings
-        
-        Returns:
-            bitstrings: (batch_size, N)
-        """
-        batch_size = logits.size(0)
-        
-        # Sample from categorical distribution
-        probs = F.softmax(logits, dim=1)
-        indices = torch.multinomial(probs, num_samples=1).squeeze(1)
-        
-        # Convert indices to bitstrings
-        bitstrings = self._indices_to_bitstrings(indices)
-        
-        return bitstrings
-    
-    def _indices_to_bitstrings(self, indices: torch.Tensor) -> torch.Tensor:
-        """Convert integer indices to bitstrings."""
-        batch_size = indices.size(0)
-        bitstrings = torch.zeros(batch_size, self.N, dtype=torch.float32, 
-                               device=indices.device)
-        
-        for i in range(self.N):
-            bitstrings[:, i] = ((indices >> i) & 1).float()
-        
-        return bitstrings
-    
+        if hard:
+            # Generate discrete samples (0 or 1)
+            samples = (probs > 0.5).float()
+            # STE: Pass gradients through the non-differentiable thresholding
+            samples = samples.detach() - probs.detach() + probs
+            return samples
+            
+        return probs
+            
     def get_param_count(self) -> int:
         """Return total trainable parameters."""
         return sum(p.numel() for p in self.parameters())
@@ -282,11 +276,11 @@ class Trainer:
         # Generate noise in input to the neural network
         z = torch.randn(batch_size, self.N, device=self.device)
         
-        # Forward: get logits for each bitstring
-        logits = self.model(z)  # (batch_size, 2^N)
+        # Forward: get samples IMPORTART hard=False, or we get gradient vanishing from too rigid parameters.
+        samples = self.model(z, hard=False)
         
         # Compute MMD²
-        loss = self.mmd_loss(logits)
+        loss = self.mmd_loss(samples)
         
         # Backward (gradients clipping)
         loss.backward()
@@ -347,9 +341,9 @@ if __name__ == "__main__":
     from qfso.distributions import discretized_normal_probability, plot_distributions
 
     N = 8
-    k = 2.0
-    r = 1.0
-        
+    k = 3.0
+    r = 1
+    epochs=200
 
     model = Model(N=N, k=k, r=r)
 
@@ -386,7 +380,7 @@ if __name__ == "__main__":
     print()
     
     trainer.train(
-        num_epochs=100,
+        num_epochs=epochs,
         batch_size=128,
         eval_interval=10
     )
