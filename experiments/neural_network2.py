@@ -1,21 +1,42 @@
-"""
-Differentiable generative model for bitstring distributions.
-MMD² loss in Fourier space with proper gradient flow via Straight-Through Estimator.
-Parameter count strictly controlled: P = N^k * r
-"""
+from typing import Tuple
+import pickle
+from itertools import combinations
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import numpy as np
 from scipy.stats import norm
 from numba import njit
-from typing import Tuple
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
-
-# ============================================================================
-# Walsh-Hadamard Transform (Fourier basis)
-# ============================================================================
+def load_real_spoofing_data(N: int, filepath: str, mmd_sigma: float):
+    """Carica le expectation values e ricostruisce la K_matrix per i dati reali."""
+    # 1. Carica le expectation values
+    with open(filepath, 'rb') as f:
+        data = pickle.load(f)
+        
+    target_wht_trunc = data['expvals']
+    
+    # 2. Ricostruisce la K_matrix utilizzando la stessa logica di estrazione
+    ops = []
+    for weight in (1, 2):
+        for idxs in combinations(range(N), weight):
+            op = np.zeros(N, dtype=np.float32)
+            op[list(idxs)] = 1.0
+            ops.append(op)
+            
+    K_matrix = np.array(ops, dtype=np.float32)
+    
+    # 3. Calcola i pesi MMD in base all'Hamming weight (somma di ogni riga)
+    hw_array = K_matrix.sum(axis=1)
+    weights = np.array([mmd_kernel_weight(int(h), N, mmd_sigma) for h in hw_array], dtype=np.float32)
+    
+    # 4. Converte tutto in tensori PyTorch
+    target_wht_tensor = torch.from_numpy(target_wht_trunc).float()
+    K_matrix_tensor = torch.from_numpy(K_matrix)
+    weights_tensor = torch.from_numpy(weights)
+    
+    return target_wht_tensor, K_matrix_tensor, weights_tensor
 
 @njit(cache=True)
 def wht_numba(p: np.ndarray) -> np.ndarray:
@@ -32,91 +53,152 @@ def wht_numba(p: np.ndarray) -> np.ndarray:
         h *= 2
     return a
 
-
 @njit(cache=True)
 def mmd_kernel_weight(hw: int, n: int, sigma: float) -> float:
     """Binomial MMD kernel weight."""
     p = 0.5 * (1.0 - np.exp(-1.0 / (2.0 * sigma)))
     return (p**hw) * ((1.0 - p) ** (n - hw))
 
+def mocking_spoofing(N, target_dist, mmd_sigma, max_hw):
+    # Extract truncated target WHT (Mocking the spoofing scenario)
+    # We use your wht_numba function to get the "oracle" full transform
+    target_wht_full = wht_numba(target_dist)
+    
+    # Example truncation: Select only frequencies with Hamming weight <= 2
+    all_freqs = np.arange(2**N)
+    hw_array = np.array([int(k).bit_count() for k in all_freqs])
+    
+    valid_mask = (hw_array <= max_hw)
+    selected_freqs = all_freqs[valid_mask]
+    
+    # This is the target array of shape (M,)
+    target_wht_trunc = target_wht_full[valid_mask]
+    
+    # Build K_matrix (M, N) efficiently using bitwise operations
+    # Broadcast right shift and AND with 1 to extract binary representation
+    M = len(selected_freqs)
+    K_matrix = ((selected_freqs[:, None] >> np.arange(N)) & 1).astype(np.float32)
+    
+    # Compute MMD kernel weights for selected frequencies
+    hw_filtered = hw_array[valid_mask]
+    weights = np.array([mmd_kernel_weight(h, N, mmd_sigma) for h in hw_filtered], dtype=np.float32)
+    
+    # Convert all to PyTorch tensors
+    target_wht_tensor = torch.from_numpy(target_wht_trunc)
+    K_matrix_tensor = torch.from_numpy(K_matrix)
+    weights_tensor = torch.from_numpy(weights)
+
+    return target_wht_tensor, K_matrix_tensor, weights_tensor
+
+def probability_from_samples(samples: np.ndarray, N: int) -> np.ndarray:
+    """
+    Compute empirical probability distribution from samples.
+    Ensures index 0 of the array is treated as the Least Significant Bit (2^0).
+    """
+    counts = np.zeros(2**N, dtype=np.float32)
+    
+    for bitstring in samples:
+        idx = 0
+        # Loop through every bit and its position index
+        for i, bit in enumerate(bitstring):
+            # Compute the decimal value of the bit based on its position
+            # Index 0 -> 2^0 = 1
+            # Index 1 -> 2^1 = 2
+            # Index 2 -> 2^2 = 4 ...
+            bit_value = int(bit) * (2 ** i)
+            
+            # Accumulate the value to build the final integer index
+            idx += bit_value
+            
+        counts[idx] += 1
+        
+    return counts / counts.sum()
 
 class MMD(nn.Module):
     """
-    MMD² loss in Fourier space with gradient flow.
-    Uses bitstring probabilities directly instead of discrete samples.
-
-
-    TODO ⚠⚠ Right now it is computing full WHT transform of the two distributions. 
-    Needs to be changed such that, the target transform is passed from outside, 
-    and the model probability distribution if computed only the PARTIAL wht,
-    that needs to be differentiable, to be implemented⚠⚠
-    """
+    Differentiable Maximum Mean Discrepancy (MMD²) Loss in Truncated Fourier Space.
     
-    def __init__(self, N: int, target_dist: np.ndarray, mmd_sigma: float = 1.0):
+    This module computes the MMD between a target distribution and an empirical 
+    distribution generated by a neural network, evaluated purely in the 
+    Walsh-Hadamard Transform (WHT) basis.
+    
+    SPECTRUM TRUNCATION
+    Instead of calculating the full O(2^N) state space, this loss operates strictly 
+    on a truncated spectrum of M chosen frequencies. The model is penalized ONLY on 
+    how well its empirical WHT matches the target WHT for these M frequencies. 
+    Consequently, the model's capacity to spoof the target is fundamentally 
+    dependent on which frequencies are selected for the truncation (e.g., filtering 
+    by Hamming weight). Features of the target distribution encoded in omitted 
+    frequencies will be ignored during training.
+    
+    DIFFERENTIABLE MAPPING (The N -> M Bridge)
+    To maintain the PyTorch computational graph from the N-dimensional model outputs 
+    through to the M-dimensional WHT spectrum, this module uses a continuous 
+    algebraic mapping. For a binary frequency mask K, continuous probabilities 
+    (or STE bits) x_i in [0,1] are mapped to spin expectations in [1,-1] via:
+        term = K * (1 - 2x) + (1 - K)
+        
+    Args:
+        N (int): 
+            The length of the generated bitstrings.
+        target_wht (torch.Tensor): 
+            Shape (M,). The pre-computed truncated WHT coefficients of the target 
+            distribution for the M selected frequencies.
+        K_matrix (torch.Tensor): 
+            Shape (M, N). The binary frequency mask. Each row represents one of 
+            the M frequencies, with 1s indicating active bits and 0s indicating 
+            inactive bits for the parity calculation.
+        kernel_weights (torch.Tensor): 
+            Shape (M,). The MMD kernel weights (e.g., binomial weights based on 
+            Hamming distance) corresponding to the M selected frequencies.
+    """
+
+    def __init__(self, N: int, target_wht: torch.Tensor, K_matrix: torch.Tensor, kernel_weights: torch.Tensor):
         """
         Args:
             N: Bitstring length
-            target_dist: Target probability distribution (2^N,)
-            mmd_sigma: Kernel bandwidth
+            target_wht: (M,) tensor of the pre-computed truncated WHT of the target
+            K_matrix: (M, N) float tensor containing the binary representations of the M frequencies
+            kernel_weights: (M,) float tensor of the MMD weights for these specific frequencies
         """
         super().__init__()
         self.N = N
-        self.mmd_sigma = mmd_sigma
         
-        # Precompute target distribution, keeping the process out of differentiation
-        self.register_buffer(
-            'target_dist',
-            torch.from_numpy(target_dist / target_dist.sum()).float()
-        )
-        
-        # Precompute MMD kernel weights in Fourier space
-        # TODO: like this cannot scale, cause we are looping on 2**N
-        weights = np.array(
-            [mmd_kernel_weight(k.bit_count(), N, mmd_sigma) for k in range(2**N)],
-            dtype=np.float32
-        )
-        self.register_buffer('kernel_weights', torch.from_numpy(weights))
+        # Register inputs as buffers so they move to the correct device with the model
+        self.register_buffer('target_wht', target_wht.float())
+        self.register_buffer('K_matrix', K_matrix.float())
+        self.register_buffer('kernel_weights', kernel_weights.float())
     
     def forward(self, samples: torch.Tensor) -> torch.Tensor:
         """
-        Compute differentiable MMD² loss.
+        Compute differentiable MMD² loss on truncated frequencies.
         
         Args:
-            samples: (batch_size, N) bitstrings from the model
+            samples: (batch_size, N) bitstrings from the model (continuous or STE)
         
         Returns:
             loss: scalar torch tensor (differentiable)
         """
-        batch_size = samples.size(0)
-        device = samples.device
+        # Map samples [0, 1] to [1, -1] lets call it "spin" shape
+        spins = 1.0 - 2.0 * samples  # Shape: (batch_size, N)
         
-        # BRIDGE: Construct the 2^N empirical distribution from N-dim samples.
-        # This keeps the gradients flowing back to the N bits.
-        indices = torch.arange(2**self.N, device=device)
+        # Expand dimensions for broadcasting
+        # spins: (batch_size, 1, N)
+        # K_matrix: (1, M, N)
+        spins_expanded = spins.unsqueeze(1)
+        K_expanded = self.K_matrix.unsqueeze(0)
         
-        # Create a (2^N, N) matrix of all possible ideal bitstrings
-        bit_matrix = ((indices.unsqueeze(1) >> torch.arange(self.N, device=device)) & 1).float()
+        # Differentiable conditional mapping: 
+        # If K=1 -> use spin value. If K=0 -> use 1.0.
+        term = spins_expanded * K_expanded + (1.0 - K_expanded)  # Shape: (batch_size, M, N)
         
-        # Probability of each sample matching each 2^N state
-        # samples: (batch_size, 1, N), bit_matrix: (1, 2^N, N)
-        match_probs = samples.unsqueeze(1) * bit_matrix.unsqueeze(0) + \
-                      (1 - samples.unsqueeze(1)) * (1 - bit_matrix.unsqueeze(0))
-                      
-        # Joint probability over N bits -> (batch_size, 2^N)
-        state_probs = match_probs.prod(dim=2)
+        # Compute joint parity (product over N) and batch expectation
+        wht_batch = term.prod(dim=2)         # Shape: (batch_size, M)
+        fourier_emp = wht_batch.mean(dim=0)  # Shape: (M,)
         
-        # Mean probability across batch (empirical distribution)
-        empirical_dist = state_probs.mean(dim=0)  # (2^N,)
-        
-        # Transform both to Fourier space
-        # TODO: we use full Fourier transform, differentiable
-        # in the final one, fourier_target will be passed from outside
-        fourier_emp = self._full_wht(empirical_dist)
-        fourier_target = self._full_wht(self.target_dist)
-        
-        # MMD²
-        diff = fourier_emp - fourier_target
-        mmd_sq = torch.sum(self.kernel_weights * diff ** 2)
+        # Compute MMD² Loss over the M frequencies
+        diff = fourier_emp - self.target_wht
+        mmd_sq = torch.sum(self.kernel_weights * (diff ** 2))
         
         return mmd_sq
         
@@ -181,7 +263,7 @@ class Model(nn.Module):
         self.net = nn.Sequential(
             nn.Linear(N, H),
             nn.ReLU(),
-            nn.Linear(H, N)  # CHANGED: Logit for each of the N bits
+            nn.Linear(H, N)
         )
     
     def forward(self, z: torch.Tensor, hard: bool = True) -> torch.Tensor:
@@ -228,32 +310,31 @@ class Trainer:
     def __init__(
         self,
         model: Model,
-        target_dist: np.ndarray,
+        target_wht: torch.Tensor,
+        K_matrix: torch.Tensor,
+        kernel_weights: torch.Tensor,
         device: str = "cpu",
-        mmd_sigma: float = 1.0,
         lr: float = 1e-3,
     ):
         """
         Args:
             model: Model instance
-            target_dist: Target probability distribution (2^N,)
+            target_wht: (M,) tensor of the truncated target WHT
+            K_matrix: (M, N) tensor of binary frequency representations
+            kernel_weights: (M,) tensor of pre-calculated kernel weights
             device: "cpu" or "cuda"
-            mmd_sigma: MMD kernel bandwidth
             lr: Learning rate
         """
         self.model = model.to(device)
         self.device = device
         self.N = model.N
         
-        # Loss function
-        self.mmd_loss = MMD(model.N, target_dist, mmd_sigma).to(device)
+        # Loss function initialized with the pre-computed tensors
+        self.mmd_loss = MMD(model.N, target_wht, K_matrix, kernel_weights).to(device)
         
         # Optimizer
         self.optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-        # Updating learning rate with Cosine Annealing:
-        # https://docs.pytorch.org/docs/2.12/generated/torch.optim.lr_scheduler.CosineAnnealingLR.html , based on:
-        # https://arxiv.org/abs/1608.03983
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer, T_max=200
         )
@@ -327,8 +408,8 @@ class Trainer:
         self.model.eval()
         with torch.no_grad():
             z = torch.randn(num_samples, self.N, device=self.device)
-            logits = self.model(z)
-            bitstrings = self.model.sample_from_logits(logits, hard=True)
+            # logits = self.model(z)
+            bitstrings = self.model.forward(z, hard=True)
         return bitstrings.cpu().numpy()
     
     def get_history(self) -> dict:
@@ -336,14 +417,12 @@ class Trainer:
         return self.history
 
 
-
 if __name__ == "__main__":
-    from qfso.distributions import discretized_normal_probability, plot_distributions
-
-    N = 8
+    # N deve corrispondere alla dimensione reale dei dati IQP
+    N = 484
     k = 3.0
-    r = 1
-    epochs=200
+    r = 2
+    epochs = 300
 
     model = Model(N=N, k=k, r=r)
 
@@ -358,19 +437,20 @@ if __name__ == "__main__":
     print(f"Actual parameters:           {config['actual_params']}")
     print()
     
-    # Target
-    # In our test this should be the distribution of the quantum circuit we are trying to spoof
-    # Of course if spoofing we do not have access to this, but just to the truncated wht transform.
-    # We need to adapt the class MMD such that instead of doing the full WHT transform of this, takes
-    # the pre-computed truncaded transform.
-    target_dist = discretized_normal_probability((-10, 9), 2**N)
-
+    # Caricamento dati reali
+    filepath = 'expvals_IqpSimulator_dwave.pkl'
+    target_wht_tensor, K_matrix_tensor, weights_tensor = load_real_spoofing_data(
+        N=N, 
+        filepath=filepath, 
+        mmd_sigma=0.1 * N
+    )
     
-    # Create trainer
+    # Inizializzazione Trainer
     trainer = Trainer(
-        model,
-        target_dist,
-        mmd_sigma=1.0,
+        model=model,
+        target_wht=target_wht_tensor,
+        K_matrix=K_matrix_tensor,
+        kernel_weights=weights_tensor,
         lr=1e-1
     )
     
@@ -381,18 +461,10 @@ if __name__ == "__main__":
     
     trainer.train(
         num_epochs=epochs,
-        batch_size=128,
+        # ATTENZIONE: Batch size ridotto per evitare OOM con N=484 e M=117370
+        batch_size=256, 
         eval_interval=10
     )
-    
-    # Evaluate
-    # print()
-    # print("=" * 60)
-    # print("Sample Results")
-    # print("=" * 60)
-    
-    # samples = trainer.sample(10)
-    # print(f"\nGenerated {samples.shape[0]} samples:")
-    # for i, s in enumerate(samples):
-    #     binary_str = "".join(map(str, s.astype(int)))
-    #     print(f"  {i}: {binary_str}")
+
+    min_loss = np.min(trainer.get_history()["loss"])
+    print(f"Addestramento concluso. Minima Loss MMD raggiunta: {min_loss:.4e}")
