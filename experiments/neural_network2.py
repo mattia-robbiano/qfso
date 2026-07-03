@@ -81,25 +81,51 @@ class MMD(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, N: int, k: float = 2.0, r: float = 1.0):
+    """
+    Deep Residual MLP Model per spoofing ad alta capacità.
+    """
+    def __init__(self, N: int, hidden_dim: int = 1024):
         super().__init__()
         self.N = N
-        self.k = k
-        self.r = r
+        self.hidden_dim = hidden_dim
         
-        target_params = int((N ** k) * r)
-        H = max(1, (target_params - N) // (N + N + 1))
-        self.hidden_dim = H
-        
-        self.net = nn.Sequential(
-            nn.Linear(N, H),
-            nn.ReLU(),
-            nn.Linear(H, N)
+        # Proiezione iniziale
+        self.input_layer = nn.Sequential(
+            nn.Linear(N, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.ReLU()
         )
-    
-    def forward(self, z: torch.Tensor, hard: bool = True) -> torch.Tensor:
-        logits = self.net(z)
-        probs = torch.sigmoid(logits)
+        
+        # Blocchi Residuali per sostenere i gradienti dello STE
+        self.res_block1 = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim)
+        )
+        
+        self.res_block2 = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim)
+        )
+        
+        # Livello di output per i logit dei bit
+        self.output_layer = nn.Linear(hidden_dim, N)
+        self.relu = nn.ReLU()
+        
+    def forward(self, z: torch.Tensor, temp: float = 1.0, hard: bool = True) -> torch.Tensor:
+        h = self.input_layer(z)
+        # Skip connections
+        h = self.relu(h + self.res_block1(h))
+        h = self.relu(h + self.res_block2(h))
+        
+        logits = self.output_layer(h)
+        # Temperature scaling per ridurre il bias dello STE
+        probs = torch.sigmoid(logits / temp)
         
         if hard:
             samples = (probs > 0.5).float()
@@ -115,9 +141,6 @@ class Model(nn.Module):
         return {
             "N": self.N,
             "hidden_dim": self.hidden_dim,
-            "k": self.k,
-            "r": self.r,
-            "target_params": int(self.N**self.k * self.r),
             "actual_params": self.get_param_count(),
         }
 
@@ -132,6 +155,7 @@ class Trainer:
         device: torch.device,
         local_rank: int = 0,
         lr: float = 1e-3,
+        total_epochs: int = 10000,
     ):
         self.device = device
         self.local_rank = local_rank
@@ -148,48 +172,45 @@ class Trainer:
             
         self.mmd_loss = MMD(self.N, target_wht, K_matrix, kernel_weights).to(device)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=3000)
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=total_epochs)
         self.history = {"loss": [], "lr": []}
     
-    def train_step(self, batch_size: int = 512, num_frequencies: int = 2048) -> float:
+    def train_step(self, batch_size: int = 1024, num_frequencies: int = 2048, current_epoch: int = 0, total_epochs: int = 10000) -> float:
         self.optimizer.zero_grad()
         
-        # 1. Forward pass
+        # Batch reale massiccio in un solo passaggio per distruggere il bias di varianza
         z = torch.randn(batch_size, self.N, device=self.device)
-        samples = self.model(z, hard=False)
+        
+        # Passiamo temp=1.0 per usare il modello liscio senza annealing
+        samples = self.model(z, temp=1.0, hard=False)
         
         spins = 1.0 - 2.0 * samples
         spins_expanded = spins.unsqueeze(1) # (batch_size, 1, N)
         
         M_total = self.mmd_loss.target_wht.size(0)
         
-        # 2. Campionamento Stocastico delle Frequenze
-        # Estraiamo un sottoinsieme casuale di indici per questo singolo step
         idx = torch.randint(0, M_total, (num_frequencies,), device=self.device)
         
-        K_sampled = self.mmd_loss.K_matrix[idx]            # (num_frequencies, N)
-        target_sampled = self.mmd_loss.target_wht[idx]     # (num_frequencies,)
-        weight_sampled = self.mmd_loss.kernel_weights[idx] # (num_frequencies,)
+        K_sampled = self.mmd_loss.K_matrix[idx]            
+        target_sampled = self.mmd_loss.target_wht[idx]     
+        weight_sampled = self.mmd_loss.kernel_weights[idx] 
         
-        # 3. Calcolo Loss vettorializzato sul sottoinsieme
-        K_expanded = K_sampled.unsqueeze(0)                # (1, num_frequencies, N)
+        K_expanded = K_sampled.unsqueeze(0)                
         term = spins_expanded * K_expanded + (1.0 - K_expanded)
         
-        wht_batch = term.prod(dim=2)                       # (batch_size, num_frequencies)
-        fourier_emp = wht_batch.mean(dim=0)                # (num_frequencies,)
+        wht_batch = term.prod(dim=2)                       
+        fourier_emp = wht_batch.mean(dim=0)                
         diff = fourier_emp - target_sampled
         
-        # Loss sul sottoinsieme, scalata per rappresentare la somma totale
         loss = torch.sum(weight_sampled * (diff ** 2)) * (M_total / num_frequencies)
         
-        # 4. Backward & Step (il grafo è ora piccolissimo in memoria)
         loss.backward()
+        
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
         self.optimizer.step()
         
         total_loss_val = loss.item()
         
-        # Sincronizzazione logica DDP
         if dist.is_initialized():
             loss_tensor = torch.tensor(total_loss_val, device=self.device)
             dist.all_reduce(loss_tensor, op=dist.ReduceOp.SUM)
@@ -201,18 +222,21 @@ class Trainer:
         
         return total_loss_val
     
-    def train(self, num_epochs: int = 100, batch_size: int = 512, num_frequencies: int = 2048, eval_interval: int = 10):
+    def train(self, num_epochs: int = 10000, batch_size: int = 256, num_frequencies: int = 2048, eval_interval: int = 100):
         if self.is_main_process:
             print("Starting training...")
             print(f"{'Epoch':<8} {'Loss':<12}")
             print("-" * 22)
         
         for epoch in range(num_epochs):
-            # Passiamo sia il batch dei sample che il batch delle frequenze
-            loss = self.train_step(batch_size=batch_size, num_frequencies=num_frequencies)
+            loss = self.train_step(
+                batch_size=batch_size, 
+                num_frequencies=num_frequencies,
+                current_epoch=epoch,
+                total_epochs=num_epochs
+            )
             
-            if (epoch + 1) % 10 == 0:
-                self.scheduler.step()
+            self.scheduler.step()
             
             if self.is_main_process and (epoch + 1) % eval_interval == 0:
                 print(f"{epoch + 1:<8} {loss:.6f}")
@@ -230,21 +254,17 @@ if __name__ == "__main__":
     device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
 
     N = 484
-    k = 2.0
-    r = 1.5
-    epochs = 3000
+    epochs = 10000
 
-    model = Model(N=N, k=k, r=r)
+    model = Model(N=N, hidden_dim=1024)
 
     if is_main_process:
         config = model.get_config()
         print("=" * 60)
-        print("Model Configuration")
+        print("Model Configuration (Deep ResNet)")
         print("=" * 60)
         print(f"Bitstring length (N):        {config['N']}")
         print(f"Hidden dimension (H):        {config['hidden_dim']}")
-        print(f"Parameter scaling (k, r):    k={config['k']}, r={config['r']}")
-        print(f"Target parameters (N^k*r):   {config['target_params']}")
         print(f"Actual parameters:           {config['actual_params']}")
         print()
     
@@ -254,14 +274,15 @@ if __name__ == "__main__":
     )
     
     trainer = Trainer(
-            model=model,
-            target_wht=target_wht_tensor,
-            K_matrix=K_matrix_tensor,
-            kernel_weights=weights_tensor,
-            device=device,
-            local_rank=local_rank,
-            lr=1e-3  # Abbassato da 1e-1
-        )
+        model=model,
+        target_wht=target_wht_tensor,
+        K_matrix=K_matrix_tensor,
+        kernel_weights=weights_tensor,
+        device=device,
+        local_rank=local_rank,
+        lr=1e-3,
+        total_epochs=epochs 
+    )
     
     if is_main_process:
         print("=" * 60)
@@ -270,12 +291,12 @@ if __name__ == "__main__":
         print()
     
     trainer.train(
-            num_epochs=epochs,
-            batch_size=512,          # Raddoppiato
-            num_frequencies=4096,     # Raddoppiato (se la VRAM regge, altrimenti lascia 4096)
-            eval_interval=100
-        )
-    # Salvataggio delegato solo al processo Main (per evitare corruzione dei file)
+        num_epochs=epochs,
+        batch_size=512,          
+        num_frequencies=2048,    
+        eval_interval=100
+    )
+    
     if is_main_process:
         min_loss = np.min(trainer.get_history()["loss"])
         print(f"Addestramento concluso. Minima Loss MMD raggiunta: {min_loss:.4e}")
