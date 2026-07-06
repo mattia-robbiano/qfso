@@ -12,13 +12,13 @@ from .iqp import (
     sigma_heuristic,
 )
 from .approximate import (
-    match_first_order,
-    match_mmd_optimal,
-    mmd_exact,
-    mmd_kernel_weight,
-    mmd_squared,
-    renyi_entropy,
-    wht,
+    EmpiricalDistribution,
+    FactorizedDistribution,
+    LinCombApproximation,
+    MMD,
+    MaxCoefficientHeuristic,
+    OptimizedMaxCoeffHeuristic,
+    SweepingLinearCombHeuristic,
 )
 
 __all__ = [
@@ -33,11 +33,11 @@ __all__ = [
     "median_heuristic",
     "sigma_spectrum",
     "sigma_heuristic",
-    "match_first_order",
-    "match_mmd_optimal",
-    "mmd_exact",
-    "mmd_kernel_weight",
-    "mmd_squared",
-    "wht",
-    "renyi_entropy",
+    "EmpiricalDistribution",
+    "FactorizedDistribution",
+    "LinCombApproximation",
+    "MMD",
+    "MaxCoefficientHeuristic",
+    "OptimizedMaxCoeffHeuristic",
+    "SweepingLinearCombHeuristic"
 ]

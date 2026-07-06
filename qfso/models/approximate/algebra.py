@@ -7,7 +7,7 @@ def int_to_gf2(i: int, n: int) -> galois.Array:
     """Convert an integer to its binary representation in GF(2)."""
     return GF([(i >> j) & 1 for j in range(n)])
 
-def gf2_to_int(v: galois.Array) -> int:
+def gf2_to_int(v: galois.Array | np.ndarray) -> int:
     """Convert a GF(2) array back to an integer."""
     return sum(int(v[j]) << j for j in range(len(v)))
 
