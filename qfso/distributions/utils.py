@@ -23,6 +23,12 @@ def uniform_like(p: np.ndarray) -> np.ndarray:
     return np.ones_like(p) / p.size
 
 
+def renyi_entropy(distribution: np.ndarray, alpha: float = 2.0, tol: float = 1e-10) -> float:
+    """Compute the Renyi entropy of a distribution."""
+    if alpha == 1.0:
+        return -np.sum(distribution * np.log(distribution + tol))
+    return (1.0 / (1.0 - alpha)) * np.log(np.sum(distribution**alpha) + tol)
+
 __all__ = [
     "random_probability_vector",
     "discretized_normal_probability",
