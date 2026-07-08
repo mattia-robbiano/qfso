@@ -1,14 +1,17 @@
 from .probability import (
-    FactorizedDistribution, 
-    EmpiricalDistribution, 
+    FactorizedDistribution,
+    EmpiricalDistribution,
     LinCombApproximation,
     DiscretizedGaussian,
+    FromSpectrum,
 )
 from .metrics import MMD
+from .optimizer import fit
 from .heuristics import (
-    MaxCoefficientHeuristic, 
-    OptimizedMaxCoeffHeuristic, 
-    MaxLinearCombHeuristic,
-    OptimizedMaxLinearCombHeuristic,
-    SweepingLinearCombHeuristic
+    DiscreteGreedyFitter,
+    OptimizedGreedyFitter,
+    FixedBasisFitter,
+    IncrementalLinearCombBuilder,
+    GlobalOptimizedLinearComb,
+    SweepingLinearCombFitter,
 )

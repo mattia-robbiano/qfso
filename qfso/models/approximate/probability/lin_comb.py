@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 import numpy as np
+import jax.numpy as jnp
 
 from .base import ProbabilityDistribution
-
 
 class LinCombApproximation(ProbabilityDistribution):
 
@@ -30,8 +30,8 @@ class LinCombApproximation(ProbabilityDistribution):
             assert p.n == self.n, f"Probability distributions must all be defined on the same amount of bits. Given {self.n} and {p.n}" 
         
         self._probabilities = ps
-        self.walsh_hadamard_spectrum.cache_clear()
         self.vector.cache_clear()
+        # Non possiamo più fare self.walsh_hadamard_spectrum.cache_clear() perché abbiamo rimosso il decoratore
     
     @property
     def weights(self,):
@@ -44,7 +44,6 @@ class LinCombApproximation(ProbabilityDistribution):
             self.is_valid_probability = self.is_valid_probability and (w >= 0 and w <= 1)
 
         self._weights = ws 
-        self.walsh_hadamard_spectrum.cache_clear()
         self.vector.cache_clear()
 
     def append(self, probability:ProbabilityDistribution, weight:float, renormalize_weights:bool = True):
@@ -73,9 +72,9 @@ class LinCombApproximation(ProbabilityDistribution):
             vec += w*p.vector()
         return vec
     
-    def _compute_walsh_hadamard_spectrum(self, hw_min, hw_max):
-
-        specturm = self.weights[0]*self.probabilities[0].walsh_hadamard_spectrum(hw_min, hw_max)
+    def _compute_walsh_hadamard_spectrum(self, ks: np.ndarray) -> jnp.ndarray:
+        # Ora itera passando 'ks' esplicitamente
+        spectrum = self.weights[0] * self.probabilities[0].walsh_hadamard_spectrum(ks=ks)
         for w, p in zip(self.weights[1:], self.probabilities[1:]):
-            specturm += w*p.walsh_hadamard_spectrum(hw_min, hw_max)
-        return specturm
+            spectrum += w * p.walsh_hadamard_spectrum(ks=ks)
+        return spectrum

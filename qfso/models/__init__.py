@@ -16,9 +16,9 @@ from .approximate import (
     FactorizedDistribution,
     LinCombApproximation,
     MMD,
-    MaxCoefficientHeuristic,
-    OptimizedMaxCoeffHeuristic,
-    SweepingLinearCombHeuristic,
+    DiscreteGreedyFitter,
+    OptimizedGreedyFitter,
+    SweepingLinearCombFitter,
 )
 
 __all__ = [
