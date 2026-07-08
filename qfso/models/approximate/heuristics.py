@@ -122,18 +122,22 @@ class OptimizedGreedyFitter(DiscreteGreedyFitter):
 class FixedBasisFitter(BaseFitter):
     """
     Alternativa a OptimizedGreedyFitter che evita la ricerca dei generatori.
+    Fissa i generatori alla base computazionale standard e ottimizza le 
+    probabilità tramite gradiente stocastico calcolato su un subset di ks.
     """
     def reset(self):
         return
 
-    def fit(self, target: ProbabilityDistribution, mmd: MMD, maxiter: int = 10, lr: float = 0.1) -> FactorizedDistribution:
-        probs = list(jnp.clip(0.5 * (1 + target.walsh_hadamard_spectrum(1, 1)), 0, 1))
+    def fit(self, target: ProbabilityDistribution, mmd: SubsampledMMD, maxiter: int = 10, lr: float = 0.1) -> FactorizedDistribution:
+        # Estraiamo i coefficienti per hw=1 (sicuro anche con TruncatedArraySpectrum)
+        probs = list(jnp.clip(0.5 * (1 + target.walsh_hadamard_spectrum(hw_min=1, hw_max=1)), 0, 1))
         p = FactorizedDistribution([1 << i for i in range(target.n)], probs)
 
-        target_hat = target.walsh_hadamard_spectrum(mmd.hw_min, mmd.hw_max)
-        ks = p.ks(mmd.hw_min, mmd.hw_max)
+        # Usiamo SOLO il subset stocastico pre-calcolato dalla metrica
+        target_hat = target.walsh_hadamard_spectrum(ks=mmd.active_ks)
+        ks = mmd.active_ks
         mask = p.decomposition_mask(ks)
-        filt = mmd.filter(p.n)
+        filt = mmd.active_weights
 
         def loss(params):
             single_site = 2 * params - 1
@@ -142,7 +146,6 @@ class FixedBasisFitter(BaseFitter):
 
         p.probabilities = fit(loss, p.probabilities, n_iters=maxiter, lr=lr)
         return p
-
 
 class IncrementalLinearCombBuilder(BaseFitter):
     """

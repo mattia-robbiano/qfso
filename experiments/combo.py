@@ -134,11 +134,13 @@ if __name__ == "__main__":
     n = 484
     hw_min = 1
     hw_max = 2
-    n_probs = 7
-    maxiter = 50
+    
+    # PARAMETRI OTTIMIZZATI PER VELOCITÀ/STABILITÀ
+    n_probs = 15
+    maxiter = 100
     sweeps = 10
     top_n = 500
-    sampling_fraction = 0.10 # Valutiamo solo il 10% di ~80.200 ks ad ogni sweep
+    sampling_fraction = 0.05
 
     print(f"Loading spectrum array for {n} qubits...")
     target = TruncatedArraySpectrum(
@@ -168,10 +170,11 @@ if __name__ == "__main__":
         sweeps=sweeps,
         it_per_sweep=maxiter,
         verbose=True,
-        fit_generators=True,
+        fit_generators=False,
         save_history=True,
         top_n=top_n,
     )
+
     t1 = time()
     
     # Valutiamo l'errore finale sull'intero spettro visibile (opzionale, ma utile)
