@@ -99,13 +99,13 @@ from qfso.models.approximate import (
 from qfso.models.approximate.probability.spectrum import TruncatedArraySpectrum
 from qfso.models.approximate.metrics import SubsampledMMD
 
-def plot_training_curve(history):
+def plot_training_curve(history, filename):
     import matplotlib.pyplot as plt
     plt.semilogy(range(len(history)), history)
     plt.xlabel("sweeps")
     plt.ylabel("MMD^2")
     plt.title("Training curve (Stochastic MMD)")
-    plt.show()
+    plt.savefig("filename")
 
 def save_safe_model(model: LinCombApproximation, filepath: str):
     """
@@ -177,7 +177,6 @@ if __name__ == "__main__":
 
     t1 = time()
     
-    # Valutiamo l'errore finale sull'intero spettro visibile (opzionale, ma utile)
     full_mmd = SubsampledMMD(n=n, sigma=0.25*n, hw_min=hw_min, hw_max=hw_max, fraction=1.0)
     training_error = full_mmd(target, result)
     
@@ -185,5 +184,6 @@ if __name__ == "__main__":
     
     model_filename = f"trained_combo_n{n}.pkl"
     save_safe_model(result, model_filename)
-    
-    plot_training_curve(trainer.history)
+
+    history_filename = f"trained_combo_n{n}.png"
+    plot_training_curve(trainer.history, history_filename)

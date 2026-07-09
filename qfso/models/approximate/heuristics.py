@@ -189,6 +189,11 @@ class SweepingLinearCombFitter(BaseFitter):
         ws = copy(current.weights)
 
         for i in range(self.n_probs):
+
+            # se la mmd e quella stocastica resample
+            if hasattr(mmd, 'resample'):
+                mmd.resample()
+
             p = ps.pop(i)
             w = ws[i]
             reminder = LinCombApproximation([target] + ps, [1 / w] + (self.n_probs - 1) * [-1])
