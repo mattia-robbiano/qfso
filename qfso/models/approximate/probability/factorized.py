@@ -18,13 +18,32 @@ class FactorizedDistribution(ProbabilityDistribution):
         self._independent_parities = independent_parities
         self.probabilities = probabilities
 
-        matrix = indices_to_gf2_matrix(self.independent_parities, self.n)
-        assert np.linalg.matrix_rank(matrix) == self.n, "Parities must be independent"
-        matrix_forward = np.linalg.inv(matrix)
-        matrix_backward = np.linalg.inv(matrix.T)
+        # Fast path: the "standard basis" (one single bit per generator, in
+        # order) is exactly the identity matrix in GF(2) -> rank is trivially
+        # n and its inverse is itself. This basis is what's used every time a
+        # fresh FactorizedDistribution is built from scratch (the initial
+        # `current` in SweepingLinearCombFitter.fit, and every single call of
+        # FixedBasisFitter.fit), so skipping the O(n^3) GF(2) matrix
+        # construction/rank-check/inversion here gives identical results for
+        # a fraction of the cost, with no change to the general-basis path
+        # used by DiscreteGreedyFitter/OptimizedGreedyFitter.
+        self._is_standard_basis = independent_parities == [1 << i for i in range(self.n)]
 
-        self.forward_map = lambda parities: gf2_to_int(matrix_forward @ int_to_gf2(parities, self.n))
-        self.backward_map = lambda sample: gf2_to_int(matrix_backward @ int_to_gf2(sample, self.n))
+        if self._is_standard_basis:
+            self.forward_map = lambda parities: parities
+            self.backward_map = lambda sample: sample
+        else:
+            matrix = indices_to_gf2_matrix(self.independent_parities, self.n)
+            assert np.linalg.matrix_rank(matrix) == self.n, "Parities must be independent"
+            matrix_forward = np.linalg.inv(matrix)
+            matrix_backward = np.linalg.inv(matrix.T)
+
+            self.forward_map = lambda parities: gf2_to_int(matrix_forward @ int_to_gf2(parities, self.n))
+            self.backward_map = lambda sample: gf2_to_int(matrix_backward @ int_to_gf2(sample, self.n))
+
+        # Caching per evitare ricalcoli costosi durante lo sweep
+        self._cached_ks_id = None
+        self._cached_mask = None
 
     @property
     def independent_parities(self):
@@ -38,12 +57,10 @@ class FactorizedDistribution(ProbabilityDistribution):
     def probabilities(self, ps):
         assert len(ps) == self.n, "Probabilities must match the number of generators"
         for p in ps:
-            assert p >= 0 and p <= 1, f"All probabilities must be in [0,1]. Given {p}"
+            assert 0 <= p <= 1, f"All probabilities must be in [0,1]. Given {p}"
 
-        # Stored as a jnp array so this can flow through jax.grad / jax.jit
         self._probabilities = jnp.asarray(ps, dtype=jnp.float32)
         self.vector.cache_clear()
-        # RIMOSSO: self.walsh_hadamard_spectrum.cache_clear()
 
     def sample(self) -> int:
         rs = np.random.random(size=(self.n,))
@@ -57,23 +74,28 @@ class FactorizedDistribution(ProbabilityDistribution):
         return self.forward_map(sample)
 
     def decomposition_mask(self, ks: np.ndarray) -> jnp.ndarray:
-        """
-        Static (non-differentiable) bit-mask of shape (len(ks), n): entry
-        [i, bit] is True iff generator `bit` participates in k_i's
-        decomposition over this basis. Computed once with plain numpy -
-        cheap even for n=400 since it only scales with len(ks), not 2**n.
-        """
-        decompositions = np.array([int(self.backward_map(int(k))) for k in ks])
+        ks_id = id(ks)
+        if self._cached_ks_id == ks_id and self._cached_mask is not None:
+            return self._cached_mask
+
+        if self._is_standard_basis:
+            # backward_map is the identity here, so this skips a Python-level
+            # loop of matrix-vector products (one per k) for no change in result.
+            decompositions = np.asarray(ks, dtype=np.int64)
+        else:
+            decompositions = np.array([int(self.backward_map(int(k))) for k in ks])
         bits = np.arange(self.n)
         mask = ((decompositions[:, None] >> bits[None, :]) & 1).astype(bool)
-        return jnp.asarray(mask)
+        
+        self._cached_mask = jnp.asarray(mask)
+        self._cached_ks_id = ks_id
+        return self._cached_mask
 
     def _compute_vector(self) -> np.ndarray:
         vec = _build_product_distribution(np.asarray(self.probabilities))
         perm = _basis_permutation(self.independent_parities, self.n)
         return _permute_distribution(vec, perm)
 
-    # AGGIORNATO: Ora accetta direttamente l'array 'ks'
     def _compute_walsh_hadamard_spectrum(self, ks: np.ndarray) -> jnp.ndarray:
         mask = self.decomposition_mask(ks)
         single_site = 2 * self.probabilities - 1

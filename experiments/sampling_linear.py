@@ -1,5 +1,27 @@
 import pickle
 import numpy as np
+from qfso.models.approximate.probability import FactorizedDistribution, LinCombApproximation
+
+
+def load_safe_model(filepath: str) -> LinCombApproximation:
+    """
+    Ricarica il dizionario di stato e ricostruisce gli oggetti completi.
+    """
+    with open(filepath, "rb") as f:
+        state = pickle.load(f)
+        
+    components = []
+    for comp_data in state["components"]:
+        # Ricostruisce la singola distribuzione (le lambda verranno ricalcolate fresche dall'__init__)
+        dist = FactorizedDistribution(
+            independent_parities=comp_data["independent_parities"],
+            probabilities=comp_data["probabilities"]
+        )
+        components.append(dist)
+        
+    # Ricostruisce e restituisce la combinazione lineare
+    return LinCombApproximation(components, state["weights"])
+
 
 def sample_from_lincomb(mixture, n_samples=1):
     """

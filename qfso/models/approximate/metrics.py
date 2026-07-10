@@ -41,13 +41,13 @@ class MMD(Metric):
         q_hat = q.walsh_hadamard_spectrum(self.hw_min, self.hw_max)
         return jnp.sum(self.filter(p.n) * p_hat * q_hat)
 
-
 class SubsampledMMD(Metric):
     def __init__(self, n: int, sigma: float, hw_min: int, hw_max: int, fraction: float = 0.1) -> None:
         self.n = n
         self.sigma = sigma
         self.fraction = fraction
         
+        from math import comb
         p_sigma = 0.5 * (1.0 - np.exp(-1.0 / (2.0 * sigma)))
         filter_value = lambda h: p_sigma**h * (1 - p_sigma) ** (1 - h)
         multiplicity = lambda h: comb(n, h)
@@ -61,15 +61,7 @@ class SubsampledMMD(Metric):
         self.all_ks = np.array(list(dummy.ks(hw_min, hw_max)))
         self.n_samples = int(len(self.all_ks) * fraction)
         
-        self.resample()
-
-    def resample(self):
-        """Estrae un nuovo batch casuale di k attivi"""
-        indices = np.random.choice(len(self.all_ks), self.n_samples, replace=False)
-        self.active_ks = self.all_ks[indices]
-        self.active_weights = jnp.asarray(self.all_weights[indices])
-
     def __call__(self, p: ProbabilityDistribution, q: ProbabilityDistribution) -> float:
-        p_hat = p.walsh_hadamard_spectrum(ks=self.active_ks)
-        q_hat = q.walsh_hadamard_spectrum(ks=self.active_ks)
-        return jnp.sum(self.active_weights * (p_hat - q_hat) ** 2)
+        p_hat = p.walsh_hadamard_spectrum(ks=self.all_ks)
+        q_hat = q.walsh_hadamard_spectrum(ks=self.all_ks)
+        return jnp.sum(jnp.asarray(self.all_weights) * (p_hat - q_hat) ** 2)

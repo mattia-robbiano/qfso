@@ -43,41 +43,46 @@ class FromSpectrum(ProbabilityDistribution):
         raise NotImplementedError("FromSpectrum does not support sampling.")
 
 
-# ATTENZIONE!! HO MESSO UNA PATCH TERRIBILE PERCHE IQPOPT DA COME EXPVALS UN DICT
-# CAMBIA SOLO LA RIGA 54 CON raw_array["expvals"] - SIGNORE PERDONAMI
+        raise NotImplementedError(
+            "TruncatedArraySpectrum non supporta il campionamento, "
+            "poiché rappresenta solo uno spettro troncato."
+        )
+
+
 class TruncatedArraySpectrum(ProbabilityDistribution):
-    def __init__(self, n: int, pkl_path: str, hw_min: int, hw_max: int):
+
+    def __init__(self, n: int, pkl_path: str, hw_min: int, hw_max: int, file_hw_min: int = 1, file_hw_max: int = 2):
         self.n = n
-        
         with open(pkl_path, 'rb') as f:
-            raw_array = pickle.load(f)
-        raw_array=raw_array["expvals"]
-        # Generiamo l'ordine canonico dei k per mappare l'array ai k corretti
+            raw_array = pickle.load(f)["expvals"]
+
+        # 1. Genera i k per mappare la struttura fisica dell'array nel file
         dummy = FactorizedDistribution([1 << i for i in range(n)], [0.5] * n)
-        all_ks = list(dummy.ks(hw_min, hw_max))
+        file_ks = list(dummy.ks(file_hw_min, file_hw_max))
         
-        if len(raw_array) != len(all_ks):
+        if len(raw_array) != len(file_ks):
             raise ValueError(
                 f"Dimension mismatch: L'array caricato ha {len(raw_array)} elementi, "
-                f"ma ci si aspetta {len(all_ks)} coefficienti per n={n}, hw=[{hw_min}, {hw_max}]."
+                f"ma file_hw=[{file_hw_min}, {file_hw_max}] si aspetta {len(file_ks)} coefficienti per n={n}."
             )
             
-        # Dizionario di lookup per gestire in modo robusto il subsampling
-        self._k_to_val = {int(k): float(v) for k, v in zip(all_ks, raw_array)}
+        # 2. Crea il dizionario completo mappando il file
+        full_k_to_val = {int(k): float(v) for k, v in zip(file_ks, raw_array)}
 
-    # 1. Implementa il metodo astratto per lo spettro richiesto da Base
+        # 3. Filtra e conserva solo il range richiesto per l'addestramento (hw_min, hw_max)
+        target_ks = set(dummy.ks(hw_min, hw_max))
+        self._k_to_val = {k: v for k, v in full_k_to_val.items() if k in target_ks}
+
     def _compute_walsh_hadamard_spectrum(self, ks: np.ndarray) -> jnp.ndarray:
         values = np.array([self._k_to_val.get(int(k), 0.0) for k in ks])
         return jnp.asarray(values)
 
-    # 2. Blocca esplicitamente la generazione del vettore (impossibile per n=400)
     def _compute_vector(self) -> np.ndarray:
         raise NotImplementedError(
             "TruncatedArraySpectrum non supporta la generazione del vettore denso 2^n. "
             "Usa solo accessi sparsi tramite walsh_hadamard_spectrum()."
         )
 
-    # 3. Blocca esplicitamente il sample (abbiamo solo uno spettro parziale)
     def sample(self) -> int:
         raise NotImplementedError(
             "TruncatedArraySpectrum non supporta il campionamento, "
