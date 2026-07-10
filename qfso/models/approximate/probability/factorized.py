@@ -81,7 +81,11 @@ class FactorizedDistribution(ProbabilityDistribution):
         if self._is_standard_basis:
             # backward_map is the identity here, so this skips a Python-level
             # loop of matrix-vector products (one per k) for no change in result.
-            decompositions = np.asarray(ks, dtype=np.int64)
+            # NOTE: no dtype is forced here on purpose - k values can exceed
+            # int64 for large n (bitmasks over n-1 bits), same as the original
+            # per-element loop below, which relies on numpy's default dtype
+            # inference (falling back to dtype=object for huge Python ints).
+            decompositions = np.asarray(ks)
         else:
             decompositions = np.array([int(self.backward_map(int(k))) for k in ks])
         bits = np.arange(self.n)
