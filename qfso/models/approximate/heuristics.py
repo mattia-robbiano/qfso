@@ -108,12 +108,14 @@ class FixedBasisFitter(BaseFitter):
 
         target_hat_all = target.walsh_hadamard_spectrum(ks=all_ks)
 
-        def loss(params, subkey):
+        # La closure ora cattura solo costanti statiche (n_samples, len(all_ks))
+        def loss(params, subkey, target_full, mask_full, filt_full):
             idx = jax.random.choice(subkey, len(all_ks), shape=(n_samples,), replace=False)
             
-            batch_mask = mask_all[idx]
-            batch_target = target_hat_all[idx]
-            batch_filt = filt_all[idx]
+            # Subsampling nativo su GPU
+            batch_mask = mask_full[idx]
+            batch_target = target_full[idx]
+            batch_filt = filt_full[idx]
 
             single_site = 2 * params - 1
             p_hat = jnp.prod(jnp.where(batch_mask, single_site[None, :], 1.0), axis=1)
@@ -121,7 +123,17 @@ class FixedBasisFitter(BaseFitter):
 
         key = jax.random.PRNGKey(np.random.randint(0, 2**31))
         
-        p.probabilities = fit_stochastic(loss, p.probabilities, key, n_iters=maxiter, lr=lr)
+        # Passiamo i tensori esplicitamente al JIT
+        p.probabilities = fit_stochastic(
+            loss, 
+            p.probabilities, 
+            key, 
+            target_hat_all, 
+            mask_all, 
+            filt_all, 
+            n_iters=maxiter, 
+            lr=lr
+        )
         return p
 
 
