@@ -10,8 +10,8 @@ readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Mattia Robbiano, Giulio Crognaletti" }]
 dependencies = [
-  "numpy>=1.24,<2.0",
-  "galois>=0.4",
+  "numpy>=2.4.6",
+  "galois>=0.4.11",
 ]
 
 [project.urls]
@@ -19,33 +19,35 @@ Repository = "https://github.com/mattia-robbiano/qfso/"
 
 [project.optional-dependencies]
 coremath = [
-  "scipy>=1.10",
+  "scipy>=1.17.1",
 ]
 iqp = [
-  "jax==0.4.28",
-  "jaxlib==0.4.28",
-  "nvidia-cudnn-cu12<9.0",
-  "optax>=0.2.2",
-  "quimb>=1.8.0",
-  "numba>=0.59",
-  "scipy>=1.10",
+  "jax>=0.10.1",
+  "jaxlib>=0.10.1",
+  "optax>=0.2.8",
+  "quimb>=1.14.0",
+  "numba>=0.65.1",
+  "scipy>=1.17.1",
+  "torch>=2.12.1",  # Aggiunto dato che è presente nell'ambiente iqp/deep learning
 ]
 notebooks = [
-  "matplotlib>=3.8",
+  "matplotlib>=3.10.9",
   "jupyter>=1.0",
-  "ipykernel>=6.29",
+  "ipykernel>=7.2.0",
+  "seaborn>=0.13.2",
 ]
 all = [
-  "scipy>=1.10",
-  "jax==0.4.28",
-  "jaxlib==0.4.28",
-  "nvidia-cudnn-cu12<9.0",
-  "optax>=0.2.2",
-  "quimb>=1.8.0",
-  "numba>=0.59",
-  "matplotlib>=3.8",
+  "scipy>=1.17.1",
+  "jax>=0.10.1",
+  "jaxlib>=0.10.1",
+  "optax>=0.2.8",
+  "quimb>=1.14.0",
+  "numba>=0.65.1",
+  "torch>=2.12.1",
+  "matplotlib>=3.10.9",
   "jupyter>=1.0",
-  "ipykernel>=6.29",
+  "ipykernel>=7.2.0",
+  "seaborn>=0.13.2",
 ]
 
 [project.scripts]
