@@ -45,7 +45,7 @@ if __name__ == "__main__":
     hw_min = 1
     hw_max = 2
     
-    n_probs = 10
+    n_probs = 15
     maxiter = 100
     sweeps = 10
     sampling_fraction = 0.05
