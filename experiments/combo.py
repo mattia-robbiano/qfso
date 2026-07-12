@@ -45,26 +45,27 @@ if __name__ == "__main__":
     hw_min = 1
     hw_max = 2
     
-    n_probs = 5
-    maxiter = 10
+    n_probs = 10
+    maxiter = 100
     sweeps = 10
-    # top_n = 500
-    sampling_fraction = 0.0001
+    sampling_fraction = 0.05
+
+    sigma = 7.8 # tcdq values: 7.8, 6.1, 3.9
 
     print(f"Loading spectrum array for {n} qubits...")
     target = TruncatedArraySpectrum(
             n=n, 
             pkl_path="expvals_IqpSimulator_dwave.pkl", 
-            hw_min=hw_min,       # Il target da ottimizzare (es. 1)
-            hw_max=hw_max,       # Il target da ottimizzare (es. 1)
-            file_hw_min=1,       # Il contenuto reale del pickle
+            hw_min=hw_min,
+            hw_max=hw_max,
+            file_hw_min=1,
             file_hw_max=2        
         )
     
     print(f"Initializing Stochastic MMD (sampling {sampling_fraction*100:.1f}% of coefficients)...")
     mmd = SubsampledMMD(
         n=n, 
-        sigma=7.8, # tcdq values: 7.8, 6.1, 3.9
+        sigma=sigma,
         hw_min=hw_min, 
         hw_max=hw_max, 
         fraction=sampling_fraction
