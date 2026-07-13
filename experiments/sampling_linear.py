@@ -2,7 +2,6 @@ import pickle
 import numpy as np
 from qfso.models.approximate.probability import FactorizedDistribution, LinCombApproximation
 
-
 def load_safe_model(filepath: str) -> LinCombApproximation:
     """
     Ricarica il dizionario di stato e ricostruisce gli oggetti completi.
@@ -27,18 +26,16 @@ def sample_from_lincomb(mixture, n_samples=1):
     """
     Campiona da una LinCombApproximation senza mai valutare l'intero spazio 2^n.
     """
-    # Estrae pesi e distribuzioni fattorizzate componenti
     weights = np.array(mixture.weights)
     dists = mixture.probabilities
     
-    # Assicura che i pesi siano probabilità valide per il sampling
     assert np.all(weights >= 0), "I pesi devono essere positivi per campionare"
     weights = weights / np.sum(weights)
     
     # 1. Seleziona quale distribuzione usare per ogni sample
     chosen_indices = np.random.choice(len(weights), size=n_samples, p=weights)
     
-    # 2. Campiona dalla singola FactorizedDistribution (O(n))
+    # 2. Campiona dalla singola FactorizedDistribution
     samples = []
     for idx in chosen_indices:
         dist = dists[idx]
@@ -48,16 +45,22 @@ def sample_from_lincomb(mixture, n_samples=1):
 
 if __name__ == "__main__":
     print("Caricamento modello...")
-    with open("trained_combo.pkl", "rb") as f:
-        model = pickle.load(f)
+    
+    # CORREZIONE 1: Utilizza la tua funzione custom per caricare correttamente l'oggetto
+    model = load_safe_model("trained_combo_n484.pkl")
         
-    # Verifica che il numero di qubit (n) sia caricato correttamente
-    # model.probabilities è la lista delle FactorizedDistribution
     n_qubits = model.probabilities[0].n
-    print(f"Modello caricato (n = {n_qubits})")
+    print(f"Modello caricato con successo (n = {n_qubits})")
     
-    print("\nGenerazione di 10 sample...")
-    results = sample_from_lincomb(model, n_samples=10)
+    n_tot = 100_000
+    print(f"\nGenerazione di {n_tot} sample...")
+    results = sample_from_lincomb(model, n_samples=n_tot)
     
-    for i, s in enumerate(results):
+    output_filename = "samples_combo.npy"
+    np.save(output_filename, results)
+    print(f"Tutti i sample salvati in: {output_filename}")
+    
+    print("\nVisualizzazione dei primi 5 sample (sanity check):")
+    for i in range(5):
+        s = results[i]
         print(f"Sample {i+1}: {s} (binary: {bin(s)})")
