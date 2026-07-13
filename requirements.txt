@@ -51,7 +51,7 @@ pygments==2.20.0
 pyparsing==3.3.2
 python-dateutil==2.9.0.post0
 pyzmq==27.1.0
--e file:///Users/mattiaro/repo/qfso
+-e .
 quimb==1.14.0
 scipy==1.17.1
 seaborn==0.13.2
