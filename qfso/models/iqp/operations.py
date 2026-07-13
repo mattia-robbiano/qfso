@@ -1,3 +1,4 @@
+from functools import partial
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -85,7 +86,7 @@ def expvals_mc(
     return mean_expvals, std_error
 
 
-@jax.jit(static_argnames=["n_samples"])
+@partial(jax.jit, static_argnames=["n_samples"])
 def _mmd_mc_core(
     params: jnp.ndarray,
     generators: jnp.ndarray,

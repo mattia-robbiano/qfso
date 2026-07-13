@@ -11,41 +11,52 @@ requires-python = ">=3.11"
 authors = [{ name = "Mattia Robbiano, Giulio Crognaletti" }]
 dependencies = [
   "numpy>=1.24,<2.0",
-  "galois>=0.4",
+  "galois>=0.4.11",
+  "jax==0.4.28",
+  "jaxlib==0.4.28",
+  "optax>=0.1.9,<0.2.4",
+  "quimb>=1.14.0",
+  "numba>=0.59",
+  "scipy>=1.10",
+  "matplotlib>=3.8"
 ]
 
 [project.urls]
 Repository = "https://github.com/mattia-robbiano/qfso/"
 
 [project.optional-dependencies]
-coremath = [
-  "scipy>=1.10",
-]
-iqp = [
-  "jax==0.4.28",
-  "jaxlib==0.4.28",
-  "nvidia-cudnn-cu12<9.0",
-  "optax>=0.2.2",
-  "quimb>=1.8.0",
-  "numba>=0.59",
-  "scipy>=1.10",
-]
 notebooks = [
   "matplotlib>=3.8",
   "jupyter>=1.0",
   "ipykernel>=6.29",
+  "seaborn>=0.13.2",
+]
+iqp = [
+  "jax==0.4.28",
+  "jaxlib==0.4.28",
+  "nvidia-cudnn-cu12<9.0; sys_platform == 'linux'",
+  "optax>=0.1.9,<0.2.4",
+  "quimb>=1.14.0",
+  "numba>=0.59",
+  "scipy>=1.10",
+  "matplotlib>=3.8"
 ]
 all = [
   "scipy>=1.10",
   "jax==0.4.28",
   "jaxlib==0.4.28",
-  "nvidia-cudnn-cu12<9.0",
-  "optax>=0.2.2",
-  "quimb>=1.8.0",
+  "nvidia-cudnn-cu12<9.0; sys_platform == 'linux'",
+  "optax>=0.1.9,<0.2.4",
+  "quimb>=1.14.0",
   "numba>=0.59",
   "matplotlib>=3.8",
   "jupyter>=1.0",
   "ipykernel>=6.29",
+  "seaborn>=0.13.2",
+]
+
+nn_test = [
+"nvidia-cudnn-cu12<9.0; sys_platform == 'linux'"
 ]
 
 [project.scripts]
