@@ -40,6 +40,27 @@ def save_safe_model(model: LinCombApproximation, filepath: str):
         pickle.dump(state, f)
     print(f"Model state safely saved to {filepath}")
 
+def evaluate_full_mmd(target, approx, mmd):
+    """
+    Calcola la MMD totale sull'intera popolazione dei coefficienti 
+    usando la modalità eager di JAX (sicuro per la RAM).
+    """
+    import jax.numpy as jnp
+
+    all_ks = mmd.all_ks
+    len_hw1 = target.n
+    
+    target_hat = target.walsh_hadamard_spectrum(ks=all_ks)
+    approx_hat = approx.walsh_hadamard_spectrum(ks=all_ks)
+    
+    mse1 = jnp.mean((target_hat[:len_hw1] - approx_hat[:len_hw1]) ** 2)
+    mse2 = jnp.mean((target_hat[len_hw1:] - approx_hat[len_hw1:]) ** 2)
+    
+    filt_np = np.asarray(mmd.all_weights)
+    total_mmd = filt_np[0] * mse1 + filt_np[1] * mse2 
+    
+    return float(total_mmd)
+
 if __name__ == "__main__":
     n = 484
     hw_min = 1
@@ -48,9 +69,9 @@ if __name__ == "__main__":
     n_probs = 15
     maxiter = 100
     sweeps = 10
-    sampling_fraction = 0.05
+    sampling_fraction = 0.05 # sotto 0.0005 le loss sono tutte NaN occhio!!
 
-    sigma = 7.8 # tcdq values: 7.8, 6.1, 3.9
+    sigma = n * 0.25 # tcdq values: 7.8, 6.1, 3.9
 
     print(f"Loading spectrum array for {n} qubits...")
     target = TruncatedArraySpectrum(
@@ -84,18 +105,17 @@ if __name__ == "__main__":
         verbose=True,
         fit_generators=False,
         save_history=True,
-        # top_n=top_n,
+        top_n=None
     )
 
     t1 = time()
-    
-    full_mmd = SubsampledMMD(n=n, sigma=7.8, hw_min=hw_min, hw_max=hw_max, fraction=1.0)
-    training_error = full_mmd(target, result)
-    
-    print(f"Done [{t1-t0:.2f}s] - Full MMD Error = {training_error:.3e}")
     
     model_filename = f"trained_combo_n{n}.pkl"
     save_safe_model(result, model_filename)
 
     history_filename = f"trained_combo_n{n}.png"
     plot_training_curve(trainer.history, history_filename)
+    
+    full_mmd = SubsampledMMD(n=n, sigma=sigma, hw_min=hw_min, hw_max=hw_max, fraction=1.0)
+    training_error = evaluate_full_mmd(target, result, mmd)
+    

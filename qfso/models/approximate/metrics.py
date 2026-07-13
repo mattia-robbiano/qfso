@@ -49,14 +49,11 @@ class SubsampledMMD(Metric):
         
         from math import comb
         p_sigma = 0.5 * (1.0 - np.exp(-1.0 / (2.0 * sigma)))
-        filter_value = lambda h: p_sigma**h * (1 - p_sigma) ** (1 - h)
+        filter_value = lambda h: p_sigma**h * (1 - p_sigma) ** (n - h)
         multiplicity = lambda h: comb(n, h)
         
-        filter_generator = (
-            [filter_value(h)] * multiplicity(h) for h in range(hw_min, hw_max + 1)
-        )
-
-        self.all_weights = np.array(sum(filter_generator, start=[]))
+        filter_list = list(filter_value(h) * multiplicity(h) for h in range(hw_min, hw_max + 1))
+        self.all_weights = np.array(filter_list)
         dummy = FactorizedDistribution([1 << i for i in range(n)], [0.5] * n)
         self.all_ks = np.array(list(dummy.ks(hw_min, hw_max)))
         self.n_samples = int(len(self.all_ks) * fraction)

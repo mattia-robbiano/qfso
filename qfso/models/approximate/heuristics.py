@@ -108,23 +108,45 @@ class FixedBasisFitter(BaseFitter):
 
         target_hat_all = target.walsh_hadamard_spectrum(ks=all_ks)
 
-        # La closure ora cattura solo costanti statiche (n_samples, len(all_ks))
+        # Calculate sizes outside JIT using standard numpy/python
+        filt_np = np.asarray(mmd.all_weights)
+        norm = np.sum(filt_np)
+        len_hw1 = target.n
+        len_hw2 = len(all_ks) - target.n
+
+        ideal_samples1 = int(n_samples * (filt_np[0] / norm))
+        
+        # CRITICAL: Prevent "replace=False"
+        # ma penso che si possa pure togliere
+        n_samples1 = min(ideal_samples1, len_hw1)
+        n_samples2 = min(n_samples - n_samples1, len_hw2)
+
         def loss(params, subkey, target_full, mask_full, filt_full):
-            idx = jax.random.choice(subkey, len(all_ks), shape=(n_samples,), replace=False)
+            key1, key2 = jax.random.split(subkey)
             
-            # Subsampling nativo su GPU
-            batch_mask = mask_full[idx]
-            batch_target = target_full[idx]
-            batch_filt = filt_full[idx]
+            # jax.random.choice on an integer 'x' samples from the range [0, x).
+            # We shift the second block by len_hw1 to target the HW=2 section of the arrays.
+            idx1 = jax.random.choice(key1, len_hw1, shape=(n_samples1,), replace=False)
+            idx2 = jax.random.choice(key2, len_hw2, shape=(n_samples2,), replace=False) + len_hw1
+            
+            # Concatenate to perform the heavy matrix math in one single vectorized pass
+            batch_idx = jnp.concatenate([idx1, idx2])
+            batch_mask = mask_full[batch_idx]
+            batch_target = target_full[batch_idx]
 
             single_site = 2 * params - 1
             p_hat = jnp.prod(jnp.where(batch_mask, single_site[None, :], 1.0), axis=1)
-            return jnp.sum(batch_filt * (batch_target - p_hat) ** 2)
+            
+            # Split the results back apart using static slicing to compute independent means
+            mean1 = jnp.mean((batch_target[:n_samples1] - p_hat[:n_samples1]) ** 2)
+            mean2 = jnp.mean((batch_target[n_samples1:] - p_hat[n_samples1:]) ** 2)
+            
+            return filt_full[0] * mean1 + filt_full[1] * mean2
 
         key = jax.random.PRNGKey(np.random.randint(0, 2**31))
         
         # Passiamo i tensori esplicitamente al JIT
-        p.probabilities = fit_stochastic(
+        p.probabilities, final_batch_loss = fit_stochastic(
             loss, 
             p.probabilities, 
             key, 
@@ -134,7 +156,7 @@ class FixedBasisFitter(BaseFitter):
             n_iters=maxiter, 
             lr=lr
         )
-        return p
+        return p, final_batch_loss
 
 
 class IncrementalLinearCombBuilder(BaseFitter):
@@ -160,57 +182,72 @@ class SweepingLinearCombFitter(BaseFitter):
         super().__init__()
 
     def sweep(self, target: TruncatedArraySpectrum, current: LinCombApproximation, mmd: MMD, maxiter: int, top_n: int = None):
-        ps = copy(current.probabilities)
-        ws = copy(current.weights)
+            ps = copy(current.probabilities)
+            ws = copy(current.weights)
+            sweep_loss = None # Variabile per salvare la loss
 
-        for i in range(self.n_probs):
-            print(f"Optimizing {i}")
-            p = ps.pop(i)
-            w = ws[i]
-            reminder = LinCombApproximation([target] + ps, [1 / w] + (self.n_probs - 1) * [-1])
-            self.single_prob_optimizer.reset()
-            
-            new_p = self.single_prob_optimizer.fit(reminder, mmd, maxiter, top_n=top_n) \
-                if isinstance(self.single_prob_optimizer, OptimizedGreedyFitter) \
-                else self.single_prob_optimizer.fit(reminder, mmd, maxiter)
-            
-            ps.insert(i, new_p)
+            for i in range(self.n_probs):
+                p = ps.pop(i)
+                w = ws[i]
+                reminder = LinCombApproximation([target] + ps, [1 / w] + (self.n_probs - 1) * [-1])
+                self.single_prob_optimizer.reset()
+                
+                result = self.single_prob_optimizer.fit(reminder, mmd, maxiter, top_n=top_n) \
+                    if isinstance(self.single_prob_optimizer, OptimizedGreedyFitter) \
+                    else self.single_prob_optimizer.fit(reminder, mmd, maxiter)
+                
+                print("*", flush=True, end=" ")
 
-        return LinCombApproximation(ps, ws)
+                # la loss dell ottimizzatore e relativa al resto, bisogna moltiplicare per
+                # w^2 per ottenere la completa
+                if isinstance(result, tuple):
+                    new_p, comp_loss = result
+                    sweep_loss = float(comp_loss) * (w ** 2)
+                else:
+                    new_p = result
+                
+                ps.insert(i, new_p)
+
+            # Restituiamo anche la loss dello sweep
+            return LinCombApproximation(ps, ws), sweep_loss
 
     def fit(
-        self,
-        target: ProbabilityDistribution,
-        mmd: MMD,
-        sweeps: int = 10,
-        it_per_sweep: int = 10,
-        verbose: bool = False,
-        fit_generators: bool = True,
-        save_history: bool = False,
-        top_n: int = None,
-    ) -> LinCombApproximation:
+            self,
+            target: ProbabilityDistribution,
+            mmd: MMD,
+            sweeps: int = 10,
+            it_per_sweep: int = 10,
+            verbose: bool = False,
+            fit_generators: bool = True,
+            save_history: bool = False,
+            top_n: int = None,
+        ) -> LinCombApproximation:
 
-        self.single_prob_optimizer = OptimizedGreedyFitter() if fit_generators else FixedBasisFitter()
+            self.single_prob_optimizer = OptimizedGreedyFitter() if fit_generators else FixedBasisFitter()
 
-        current = LinCombApproximation(
-            self.n_probs * [FactorizedDistribution([1 << i for i in range(target.n)], target.n * [0.5])],
-            self.n_probs * [1 / self.n_probs],
-        )
+            current = LinCombApproximation(
+                self.n_probs * [FactorizedDistribution([1 << i for i in range(target.n)], target.n * [0.5])],
+                self.n_probs * [1 / self.n_probs],
+            )
 
-        self.history = []
-        for i in range(sweeps):
-            if verbose:
-                t0_sweep = time()
-                print(f"Sweep {i+1}..", flush=True, end="")
-            if save_history:
-                self.history.append(mmd(target, current))
+            self.history = []
+            for i in range(sweeps):
+                if verbose:
+                    t0_sweep = time()
+                    print(f"Sweep {i+1}..", flush=True, end="")
 
-            current = self.sweep(target, current, mmd, it_per_sweep, top_n=top_n)
+                # Ora sweep restituisce la tupla
+                current, last_loss = self.sweep(target, current, mmd, it_per_sweep, top_n=top_n)
 
-            if verbose:
-                print(f"Done [{(time()-t0_sweep):.2f}s] - MMD={self.history[-1]:.3e}", flush=True)
+                if save_history:
+                    if last_loss is not None:
+                        self.history.append(last_loss)
+                    else:
+                        # Fallback nel caso si usi un fitter vecchio (es. OptimizedGreedyFitter)
+                        self.history.append(float(mmd(target, current)))
 
-        if save_history:
-            self.history.append(mmd(target, current))
+                if verbose:
+                    loss_str = f"{self.history[-1]:.3e}" if save_history else "N/A"
+                    print(f"Done [{(time()-t0_sweep):.2f}s] - MMD={loss_str}", flush=True)
 
-        return current
+            return current
