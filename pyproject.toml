@@ -16,10 +16,10 @@ dependencies = [
   "jax[cuda12]==0.4.28; sys_platform == 'linux'",
   "jaxlib==0.4.28",
   "optax>=0.1.9,<0.2.4",
-  "quimb>=1.14.0",
   "numba>=0.59",
   "scipy>=1.10",
   "matplotlib>=3.8",
+  "seaborn>=0.13.2",
   "nvidia-cudnn-cu12<9.0; sys_platform == 'linux'"
 ]
 
@@ -27,38 +27,18 @@ dependencies = [
 Repository = "https://github.com/mattia-robbiano/qfso/"
 
 [project.optional-dependencies]
+
 notebooks = [
-  "matplotlib>=3.10.9",
   "jupyter>=1.0",
   "ipykernel>=6.29",
-  "seaborn>=0.13.2",
 ]
 iqp = [
-  "jax==0.4.28",
-  "jaxlib==0.4.28",
-  "nvidia-cudnn-cu12<9.0; sys_platform == 'linux'",
-  "optax>=0.1.9,<0.2.4",
   "quimb>=1.14.0",
-  "numba>=0.59",
-  "scipy>=1.10",
-  "matplotlib>=3.8"
 ]
 all = [
-  "scipy>=1.10",
-  "jax==0.4.28",
-  "jaxlib==0.4.28",
-  "nvidia-cudnn-cu12<9.0; sys_platform == 'linux'",
-  "optax>=0.1.9,<0.2.4",
   "quimb>=1.14.0",
-  "numba>=0.59",
-  "matplotlib>=3.8",
   "jupyter>=1.0",
   "ipykernel>=6.29",
-  "seaborn>=0.13.2",
-]
-
-nn_test = [
-"nvidia-cudnn-cu12<9.0; sys_platform == 'linux'"
 ]
 
 [project.scripts]
