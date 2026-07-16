@@ -57,7 +57,7 @@ class IQPSampler:
         
         self.ops_file = os.path.join(path, f'ops_pool_{dataset}_q{n_qubits}_s{sigma}.npy')
         self.expvals_file = os.path.join(path, f'expvals_pool_{dataset}_q{n_qubits}_s{sigma}.npy')
-        import pdb; pdb.set_trace()
+
         if not (os.path.exists(self.ops_file) and os.path.exists(self.expvals_file)):
             self._generate_pool(gen_batch_size)
             
