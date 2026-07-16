@@ -55,35 +55,3 @@ class LinCombModel():
     def sample(self, n_samples, seed=42):
         key = jax.random.PRNGKey(seed)
         return _sample(key, self.m, self.n, self.latent_probs, self.fourier_matrix[:-1,:], n_samples)
-
-if __name__ == "__main__":
-
-    n = 135
-    m = 306
-
-    model = LinCombModel(n, m)
-
-    key = jax.random.PRNGKey(35)
-    model.fourier_matrix = model.fourier_matrix.at[:-1,:].set(jax.random.uniform(key, shape=(n,m), minval=-1, maxval=1))
-    print(model.fourier_matrix)
-
-    import itertools
-    ks = []
-    for c in itertools.combinations(range(n), 2):
-        k = jnp.zeros(n)
-        for ci in c:
-            k = k.at[ci].set(1)
-        ks.append(k)
-
-    ks_dense = jnp.array(ks)
-    print(len(ks_dense))
-    
-    from time import time
-    t = time()
-    print(model.wh_spectrum(ks_dense, 2))
-    print(f"{time()-t:.3e}s")
-
-    print(model.fourier_matrix)
-    rows = model.fourier_matrix[jnp.array([[1,-1,-1], [0,3,-1]])]
-    print(rows)
-    print(jnp.prod(rows, axis=1))
