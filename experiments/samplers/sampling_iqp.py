@@ -2,10 +2,10 @@ from qfso.models.approximate import IQPSampler
 
 dataset = "MNIST"
 n_qubits = 28*28
-pool_size = 100_000
+pool_size = 1
 sigma = 7.2
 path = "/Users/mattiaro/repo/qfso/data"
-batch_size = 1000
+batch_size = 1
 num_batches = 1
 
 iqp_sampler = IQPSampler(
