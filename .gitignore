@@ -37,3 +37,5 @@ notebooks/hadamard.ipynb
 experiments/mmd_entropy_bounds_2.py
 experiments/generated_spoofing_samples*.pkl
 plot/generated_spoofing_samples_v3.pkl
+data/iqp_sampler_batch.pkl
+data/pool_MNIST/ops_pool_MNIST_q784_s7.1.npy.zip
